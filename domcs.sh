@@ -40,10 +40,10 @@ kubectl --context="kind-${CLUSTER1_NAME}" label namespace istio-system topology.
 
 #Now setup the cacerts
 kubectl create --context kind-${CLUSTER1_NAME} secret generic cacerts -n istio-system \
-      --from-file=allcerts/cluster1/ca-cert.pem \
-      --from-file=allcerts/cluster1/ca-key.pem \
-      --from-file=allcerts/cluster1/root-cert.pem \
-      --from-file=allcerts/cluster1/cert-chain.pem
+      --from-file=allcerts/${CLUSTER1_NAME}/ca-cert.pem \
+      --from-file=allcerts/${CLUSTER1_NAME}/ca-key.pem \
+      --from-file=allcerts/${CLUSTER1_NAME}/root-cert.pem \
+      --from-file=allcerts/${CLUSTER1_NAME}/cert-chain.pem
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
@@ -51,10 +51,10 @@ kubectl --context="kind-${CLUSTER2_NAME}" label namespace istio-system topology.
 
 #Now setup the cacerts
 kubectl create --context kind-${CLUSTER2_NAME} secret generic cacerts -n istio-system \
-      --from-file=allcerts/cluster2/ca-cert.pem \
-      --from-file=allcerts/cluster2/ca-key.pem \
-      --from-file=allcerts/cluster2/root-cert.pem \
-      --from-file=allcerts/cluster2/cert-chain.pem
+      --from-file=allcerts/${CLUSTER2_NAME}/ca-cert.pem \
+      --from-file=allcerts/${CLUSTER2_NAME}/ca-key.pem \
+      --from-file=allcerts/${CLUSTER2_NAME}/root-cert.pem \
+      --from-file=allcerts/${CLUSTER2_NAME}/cert-chain.pem
 
 cat <<EOF > ${CLUSTER1_NAME}.yaml
 apiVersion: install.istio.io/v1alpha1
