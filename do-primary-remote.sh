@@ -56,7 +56,8 @@ kubectl create --context kind-${CLUSTER2_NAME} secret generic cacerts -n istio-s
       --from-file=allcerts/${CLUSTER2_NAME}/root-cert.pem \
       --from-file=allcerts/${CLUSTER2_NAME}/cert-chain.pem
 
-cat <<EOF > ${CLUSTER1_NAME}.yaml
+# Install istio onto the first cluster
+cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
@@ -99,9 +100,6 @@ spec:
             targetPort: 15017
 EOF
 
-# Install istio onto the first cluster
-istioctl install --context="kind-${CLUSTER1_NAME}" -y -f ${CLUSTER1_NAME}.yaml
-
 # Expose the control plan
 kubectl apply --context="kind-${CLUSTER1_NAME}" -n istio-system -f expose-istiod.yaml
 
@@ -123,8 +121,8 @@ istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
     --name=${CLUSTER2_NAME} | \
     kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
 
-# Setup the second cluster istio installation manifest
-cat <<EOF > ${CLUSTER2_NAME}.yaml
+# Install istio onto the second cluster
+cat <<EOF | istioctl install --context="kind-${CLUSTER2_NAME}" -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
@@ -167,9 +165,6 @@ spec:
             port: 15017
             targetPort: 15017
 EOF
-
-# Install istio onto the first cluster
-istioctl install --context="kind-${CLUSTER2_NAME}" -y -f ${CLUSTER2_NAME}.yaml
 
 # Expose the services in the second cluster
 kubectl --context="kind-${CLUSTER2_NAME}" apply -n istio-system -f expose-services.yaml
