@@ -7,7 +7,7 @@ Green='\033[0;32m'        # Green
 
 
 CTX_CLUSTER1=kind-cluster1
-CTX_CLUSTER1=kind-cluster2
+CTX_CLUSTER2=kind-cluster2
 
 # Create namespaces in each cluster
 kubectl create --context="${CTX_CLUSTER1}" namespace sample
@@ -62,7 +62,7 @@ x=1; while [ $x -le 5 ]; do
   x=$(( $x + 1 ))
 done
 
-# Get the pod name in the first cluster
+# Get the pod name in the second cluster
 while : ; do
   PODNAME=$(kubectl get pod --context="${CTX_CLUSTER2}" -n sample -l \
             app=sleep -o jsonpath='{.items[0].metadata.name}')
