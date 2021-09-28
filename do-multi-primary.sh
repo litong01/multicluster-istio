@@ -10,7 +10,7 @@ CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 
 if [[ $1 != '' ]]; then
-  kind delete cluster --name ${CLUSTER1_NAME} 
+  kind delete cluster --name ${CLUSTER1_NAME}
   kind delete cluster --name ${CLUSTER2_NAME} 
   exit 0
 fi
@@ -56,7 +56,8 @@ kubectl create --context kind-${CLUSTER2_NAME} secret generic cacerts -n istio-s
       --from-file=allcerts/${CLUSTER2_NAME}/root-cert.pem \
       --from-file=allcerts/${CLUSTER2_NAME}/cert-chain.pem
 
-cat <<EOF > ${CLUSTER1_NAME}.yaml
+# Install istio onto the first cluster
+cat <<EOF | istioctl --context="kind-${CLUSTER1_NAME}" install -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
@@ -99,14 +100,11 @@ spec:
             targetPort: 15017
 EOF
 
-# Install istio onto the first cluster
-istioctl install --context="kind-${CLUSTER1_NAME}" -y -f ${CLUSTER1_NAME}.yaml
-
 # Expose the services in the first cluster
 kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f expose-services.yaml
 
-# Setup the second cluster istio installation manifest
-cat <<EOF > ${CLUSTER2_NAME}.yaml
+# Install istio onto the second cluster
+cat <<EOF | istioctl --context="kind-${CLUSTER2_NAME}" install -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
@@ -149,12 +147,8 @@ spec:
             targetPort: 15017
 EOF
 
-# Install istio onto the first cluster
-istioctl install --context="kind-${CLUSTER2_NAME}" -y -f ${CLUSTER2_NAME}.yaml
-
 # Expose the services in the second cluster
 kubectl --context="kind-${CLUSTER2_NAME}" apply -n istio-system -f expose-services.yaml
-
 
 # Install a remote secret in the second cluster that provides access to
 # the first cluster API server
