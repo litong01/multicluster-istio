@@ -104,7 +104,7 @@ EOF
 kubectl apply --context="kind-${CLUSTER1_NAME}" -n istio-system -f expose-istiod.yaml
 
 # Expose the services in first cluster
-kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f expose-services.yaml
+kubectl apply --context="kind-${CLUSTER1_NAME}" -n istio-system -f expose-services.yaml
 
 # Get the ingress gateway IP address
 while : ; do

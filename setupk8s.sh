@@ -1,10 +1,5 @@
 #! /bin/bash
-# This script sets up k8s with Nginx Ingress controll
-# Setup some colors
-ColorOff='\033[0m'        # Text Reset
-Black='\033[0;30m'        # Black
-Red='\033[0;31m'          # Red
-Green='\033[0;32m'        # Green
+# This script sets up k8s with metallb
 
 # Handle cluster name
 if [[ -z $1 ]]; then
