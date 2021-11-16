@@ -109,6 +109,9 @@ kubectl create --context kind-${CLUSTER2_NAME} secret generic cacerts -n $ISTIO_
       --from-file=allcerts/${CLUSTER2_NAME}/root-cert.pem \
       --from-file=allcerts/${CLUSTER2_NAME}/cert-chain.pem
 
+
+CA=$(cat allcerts/root-cert.pem|base64 -w0)
+
 # Setup Istio remote config cluster
 cat <<EOF | istioctl install --context="kind-${CLUSTER2_NAME}" -y -f -
 apiVersion: install.istio.io/v1alpha1
@@ -129,6 +132,21 @@ spec:
       injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network1
     base:
       validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
+  components:
+    istiodRemote:
+      k8s:
+        overlays:
+        - kind: MutatingWebhookConfiguration
+          name: istio-sidecar-injector-${ISTIO_NAMESPACE}
+          patches:
+          - path: webhooks[0].clientConfig.caBundle
+            value: "${CA}"
+          - path: webhooks[1].clientConfig.caBundle
+            value: "${CA}"
+          - path: webhooks[2].clientConfig.caBundle
+            value: "${CA}"
+          - path: webhooks[3].clientConfig.caBundle
+            value: "${CA}"
 EOF
 
 # Setup the control plane in the external cluster (cluster1)
@@ -203,48 +221,6 @@ spec:
       operatorManageWebhooks: true
       meshID: mesh1
 EOF
-
-# Patch the webhook in remote cluster to trust the root certificate
-while : ; do
-  MUTATINGCONFIG=$(kubectl get --context="kind-${CLUSTER2_NAME}" mutatingwebhookconfiguration \
-   --no-headers -o custom-columns=":metadata.name" --selector \
-   app=sidecar-injector,install.operator.istio.io/owning-resource-namespace=$ISTIO_NAMESPACE,operator.istio.io/component=IstiodRemote)
-
-  if [[ ! -z $MUTATINGCONFIG ]]; then
-      echo "Webhook ${MUTATINGCONFIG} is deployed"
-      break
-  fi
-  echo 'Waiting for istio web hooks to be deployed...'
-  sleep 3
-done
-
-echo "Ready to patch webhooks!"
-
-CA=$(cat allcerts/root-cert.pem|base64 -w0)
-echo "Root cert is now encoded!"
-
-THEPATCH=$(cat << EOF
-webhooks:
-- name: rev.namespace.sidecar-injector.istio.io
-  clientConfig:
-    caBundle: "$CA"
-- name: rev.object.sidecar-injector.istio.io
-  clientConfig:
-    caBundle: "$CA"
-- name: namespace.sidecar-injector.istio.io
-  clientConfig:
-    caBundle: "$CA"
-- name: object.sidecar-injector.istio.io
-  clientConfig:
-    caBundle: "$CA"
-EOF
-)
-
-echo "Patch content is ready!"
-
-kubectl patch --context kind-${CLUSTER2_NAME} -n $ISTIO_NAMESPACE \
-    MutatingWebhookConfiguration $MUTATINGCONFIG \
-    --patch "${THEPATCH}"
 
 exit 0
 
