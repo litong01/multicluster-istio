@@ -33,24 +33,24 @@ IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 #Change the kubeconfig file not to use the loopback IP
 kubectl config set clusters.kind-${CLUSTER2_NAME}.server https://$IP:6443
 
-sleep 10
+# sleep 10
 # Add the self signed root certificates to both clusters so that the
 # certificates are trusted by both clusters.
-docker cp allcerts/root-cert.pem \
-  ${CLUSTER1_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
-docker exec ${CLUSTER1_NAME}-control-plane update-ca-certificates
+# docker cp allcerts/root-cert.pem \
+#   ${CLUSTER1_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
+# docker exec ${CLUSTER1_NAME}-control-plane update-ca-certificates
 # Restart k8s apiserver if it is needed
 # kubectl delete --context kind-${CLUSTER1_NAME} -n kube-system \
 #   pod/kube-apiserver-${CLUSTER1_NAME}-control-plane
 
-docker cp allcerts/root-cert.pem \
-  ${CLUSTER2_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
-docker exec ${CLUSTER2_NAME}-control-plane update-ca-certificates
+# docker cp allcerts/root-cert.pem \
+#   ${CLUSTER2_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
+# docker exec ${CLUSTER2_NAME}-control-plane update-ca-certificates
 # Restart k8s apiserver if it is needed
 # kubectl delete --context kind-${CLUSTER2_NAME} -n kube-system \
 #   pod/kube-apiserver-${CLUSTER2_NAME}-control-plane 
+# sleep 10
 
-sleep 10
 # Now create the namespace in external cluster
 kubectl create --context kind-${CLUSTER1_NAME} namespace $ISTIO_NAMESPACE
 kubectl create --context kind-${CLUSTER1_NAME} secret generic cacerts -n $ISTIO_NAMESPACE \
@@ -131,13 +131,6 @@ spec:
       validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
 EOF
 
-# Verify istio remote config cluster deployed correctly
-MUTATINGCONFIG=$(kubectl get --context="kind-${CLUSTER2_NAME}" mutatingwebhookconfiguration \
- --no-headers -o custom-columns=":metadata.name" --selector \
- app=sidecar-injector,install.operator.istio.io/owning-resource-namespace=$ISTIO_NAMESPACE,operator.istio.io/component=IstiodRemote)
-
-echo $MUTATINGCONFIG
-
 # Setup the control plane in the external cluster (cluster1)
 # Create the $ISTIO_NAMESPACE namespace
 
@@ -210,6 +203,48 @@ spec:
       operatorManageWebhooks: true
       meshID: mesh1
 EOF
+
+# Patch the webhook in remote cluster to trust the root certificate
+while : ; do
+  MUTATINGCONFIG=$(kubectl get --context="kind-${CLUSTER2_NAME}" mutatingwebhookconfiguration \
+   --no-headers -o custom-columns=":metadata.name" --selector \
+   app=sidecar-injector,install.operator.istio.io/owning-resource-namespace=$ISTIO_NAMESPACE,operator.istio.io/component=IstiodRemote)
+
+  if [[ ! -z $MUTATINGCONFIG ]]; then
+      echo "Webhook ${MUTATINGCONFIG} is deployed"
+      break
+  fi
+  echo 'Waiting for istio web hooks to be deployed...'
+  sleep 3
+done
+
+echo "Ready to patch webhooks!"
+
+CA=$(cat allcerts/root-cert.pem|base64 -w0)
+echo "Root cert is now encoded!"
+
+THEPATCH=$(cat << EOF
+webhooks:
+- name: rev.namespace.sidecar-injector.istio.io
+  clientConfig:
+    caBundle: "$CA"
+- name: rev.object.sidecar-injector.istio.io
+  clientConfig:
+    caBundle: "$CA"
+- name: namespace.sidecar-injector.istio.io
+  clientConfig:
+    caBundle: "$CA"
+- name: object.sidecar-injector.istio.io
+  clientConfig:
+    caBundle: "$CA"
+EOF
+)
+
+echo "Patch content is ready!"
+
+kubectl patch --context kind-${CLUSTER2_NAME} -n $ISTIO_NAMESPACE \
+    MutatingWebhookConfiguration $MUTATINGCONFIG \
+    --patch "${THEPATCH}"
 
 exit 0
 
