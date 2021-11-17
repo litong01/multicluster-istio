@@ -66,9 +66,6 @@ spec:
           - name: status-port
             port: 15021
             targetPort: 15021
-          - name: tls
-            port: 15443
-            targetPort: 15443
           - name: tls-istiod
             port: 15012
             targetPort: 15012
