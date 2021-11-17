@@ -2,9 +2,9 @@
 # This script setup istio using external control plane.
 # One cluster named cluster1 is used as external cluster
 # One cluster named cluster2 is used as remote cluster
-# The script uses one istio instance in istio-system namespace
-# to expose the istio instance in external-istiod namespace
-# which is considered as istio external control plane
+# The script uses metallb to expose istio instance
+# installed in external-istiod namespace which is
+# considered as istio external control plane
 
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
@@ -35,6 +35,24 @@ IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 #Change the kubeconfig file not to use the loopback IP
 kubectl config set clusters.kind-${CLUSTER2_NAME}.server https://$IP:6443
 
+# sleep 10
+# Add the self signed root certificates to both clusters so that the
+# certificates are trusted by both clusters.
+# docker cp allcerts/root-cert.pem \
+#   ${CLUSTER1_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
+# docker exec ${CLUSTER1_NAME}-control-plane update-ca-certificates
+# Restart k8s apiserver if it is needed
+# kubectl delete --context kind-${CLUSTER1_NAME} -n kube-system \
+#   pod/kube-apiserver-${CLUSTER1_NAME}-control-plane
+
+# docker cp allcerts/root-cert.pem \
+#   ${CLUSTER2_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
+# docker exec ${CLUSTER2_NAME}-control-plane update-ca-certificates
+# Restart k8s apiserver if it is needed
+# kubectl delete --context kind-${CLUSTER2_NAME} -n kube-system \
+#   pod/kube-apiserver-${CLUSTER2_NAME}-control-plane 
+# sleep 10
+
 # Now create the namespace in external cluster
 kubectl create --context kind-${CLUSTER1_NAME} namespace $ISTIO_NAMESPACE
 kubectl create --context kind-${CLUSTER1_NAME} secret generic cacerts -n $ISTIO_NAMESPACE \
@@ -43,44 +61,37 @@ kubectl create --context kind-${CLUSTER1_NAME} secret generic cacerts -n $ISTIO_
       --from-file=allcerts/${CLUSTER1_NAME}/root-cert.pem \
       --from-file=allcerts/${CLUSTER1_NAME}/cert-chain.pem
 
-# Use an istio instance to expose istio control plane
-kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
-
-# Setup a gateway in the external cluster
-# Create the istio gateway in istio-system namespace of the external cluster
-cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -
-apiVersion: install.istio.io/v1alpha1
-kind: IstioOperator
+# Create a loadBalancer service to expose Istio service to other clusters
+cat <<EOF | kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
+apiVersion: v1
+kind: Service
 metadata:
-  namespace: istio-system
+  name: istio-endpoint-service
+  namespace: $ISTIO_NAMESPACE
 spec:
-  meshConfig:
-    accessLogFile: /dev/stdout
-  components:
-    ingressGateways:
-    - name: istio-ingressgateway
-      enabled: true
-      k8s:
-        service:
-          ports:
-          - name: status-port
-            port: 15021
-            targetPort: 15021
-          - name: tls
-            port: 15443
-            targetPort: 15443
-          - name: tls-istiod
-            port: 15012
-            targetPort: 15012
-          - name: tls-webhook
-            port: 15017
-            targetPort: 15017
+  type: LoadBalancer
+  selector:
+    istio: pilot
+    app: istiod
+  ports:
+  - name: status-port
+    port: 15021
+    targetPort: 15021
+  - name: tls
+    port: 15443
+    targetPort: 15443
+  - name: tls-istiod
+    port: 15012
+    targetPort: 15012
+  - name: tls-webhook
+    port: 15017
+    targetPort: 15017
 EOF
 
 # Wait for the public IP address to be allocated
 while : ; do
-  EXTERNAL_ISTIOD_ADDR=$(kubectl get --context kind-${CLUSTER1_NAME} -n istio-system \
-    services/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].ip}')
+  EXTERNAL_ISTIOD_ADDR=$(kubectl get --context kind-${CLUSTER1_NAME} -n $ISTIO_NAMESPACE \
+    services/istio-endpoint-service -o jsonpath='{ .status.loadBalancer.ingress[0].ip}')
 
   if [[ ! -z $EXTERNAL_ISTIOD_ADDR ]]; then
       echo "Public IP address ${EXTERNAL_ISTIOD_ADDR} is now available"
@@ -211,67 +222,6 @@ spec:
       istioNamespace: $ISTIO_NAMESPACE
       operatorManageWebhooks: true
       meshID: mesh1
-EOF
-
-# Create Istio Gateway, VirtualService and DestinationRule configuration to
-# route traffic from the ingress gateway to the external control plane:
-cat <<EOF | kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
-apiVersion: networking.istio.io/v1beta1
-kind: Gateway
-metadata:
-  name: external-istiod-gw
-  namespace: $ISTIO_NAMESPACE
-spec:
-  selector:
-    istio: ingressgateway
-    app: istio-ingressgateway
-  servers:
-  - port:
-      number: 15012
-      protocol: tls
-      name: https-XDS
-    tls:
-      mode: PASSTHROUGH
-    hosts:
-    - "*"
-  - port:
-      number: 15017
-      protocol: tls
-      name: https-WEBHOOK
-    tls:
-      mode: PASSTHROUGH
-    hosts:
-    - "*"
----
-apiVersion: networking.istio.io/v1beta1
-kind: VirtualService
-metadata:
-   name: external-istiod-vs
-   namespace: $ISTIO_NAMESPACE
-spec:
-    hosts:
-    - "*"
-    gateways:
-    - external-istiod-gw
-    tls:
-    - match:
-      - port: 15012
-        sniHosts:
-        - "*"
-      route:
-      - destination:
-          host: istiod.external-istiod.svc.cluster.local
-          port:
-            number: 15012
-    - match:
-      - port: 15017
-        sniHosts:
-        - "*"
-      route:
-      - destination:
-          host: istiod.external-istiod.svc.cluster.local
-          port:
-            number: 443
 EOF
 
 exit 0
