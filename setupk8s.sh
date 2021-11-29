@@ -1,34 +1,55 @@
 #! /bin/bash
-# This script sets up k8s with metallb
+# This script sets up a k8s cluster using kind and metallb as k8s load balancer
+# The following software must be available on your machine before running this
+# script:
+#
+#   1. kubectl
+#   2. kind
+#   3. openssl
+#   4. docker
 
-# Handle cluster name
-if [[ -z $1 ]]; then
-  NAME=""
-  CLUSTERNAME='kind'
-else
-  NAME="--name $1"
-  CLUSTERNAME=$1
-fi
 
-# Handle metallb public ip range
-if [[ -z $2 ]]; then
-  SPACE="255"
-else
-  SPACE="$2"
-fi
+# Function to print the usage message
+function printHelp() {
+  echo "Usage: "
+  echo "    $0 -n cluster1 -r 1.22.1 -s 255"
+  echo ""
+  echo "Where:"
+  echo "    -n|--cluster-name  - name of the k8s cluster to be created"
+  echo "    -r|--k8s-release   - the release of the k8s to setup, latest available if not given"
+  echo "    -s|--ip-octet      - the 3rd octet for public ip addresses, 255 if not given"
+  echo "    -h|--help          - print the usage of this script"
+}
 
-# Handle k8s release
-if [[ -z $3 ]]; then
-  K8S_RELEASE=""
-else
-  K8S_RELEASE="--image=kindest/node:v$3"
-fi
+# Setup default values
+CLUSTERNAME="cluster1"
+K8SRELEASE=""
+IPSPACE=255
 
-kind create cluster $K8S_RELEASE $NAME
+# Handling parameters
+while [[ $# -gt 0 ]]; do
+  optkey="$1"
+  case $optkey in
+    -h|--help)
+      printHelp; exit 0;;
+    -n|--cluster-name)
+      CLUSTERNAME="$2";shift;shift;;
+    -r|--k8s-release)
+      K8SRELEASE="--image=kindest/node:v$2";shift;shift;;
+    -s|--ip-space)
+      IPSPACE="$2";shift;shift;;
+    *) # unknown option
+      echo "$1 is a not supported parameter"; exit 1;;
+  esac
+done
+
+kind create cluster $K8SRELEASE --name $CLUSTERNAME
 
 if [[ $? > 0 ]]; then
+  echo "Cluster creation has failed!"
   exit 1
 fi
+
 # Setup cluster context
 kubectl cluster-info --context kind-$CLUSTERNAME
 
@@ -52,5 +73,18 @@ data:
     - name: default
       protocol: layer2
       addresses:
-      - $PREFIX.$SPACE.230-$PREFIX.$SPACE.240
+      - $PREFIX.$IPSPACE.230-$PREFIX.$IPSPACE.240
 EOF
+
+while : ; do
+  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTERNAME}-control-plane)
+  if [[ ! -z $IP ]]; then
+    #Change the kubeconfig file not to use the loopback IP
+    kubectl config set clusters.kind-${CLUSTERNAME}.server https://${IP}:6443
+    break
+  fi
+  echo 'Waiting for public IP address to be available...'
+  sleep 3
+done
+
+echo "Kubernetes cluster ${CLUSTERNAME} was created successfully!"

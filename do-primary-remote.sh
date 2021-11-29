@@ -17,22 +17,10 @@ fi
 
 set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh ${CLUSTER1_NAME} 244
-
-# Get the IP address of the control plan
-IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER1_NAME}-control-plane)
-
-#Change the kubeconfig file not to use the loopback IP
-kubectl config set clusters.kind-${CLUSTER1_NAME}.server https://${IP}:6443
+./setupk8s.sh -n ${CLUSTER1_NAME} -s 244
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh ${CLUSTER2_NAME} 245
-
-# Get the IP address of the control plan
-IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER2_NAME}-control-plane)
-
-#Change the kubeconfig file not to use the loopback IP
-kubectl config set clusters.kind-${CLUSTER2_NAME}.server https://$IP:6443
+./setupk8s.sh -n ${CLUSTER2_NAME} -s 245
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system

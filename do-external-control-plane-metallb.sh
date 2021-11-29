@@ -18,40 +18,10 @@ fi
 
 set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh ${CLUSTER1_NAME} 244
-
-# Get the IP address of the control plan
-IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER1_NAME}-control-plane)
-
-#Change the kubeconfig file not to use the loopback IP
-kubectl config set clusters.kind-${CLUSTER1_NAME}.server https://${IP}:6443
+./setupk8s.sh -n ${CLUSTER1_NAME} -s 244
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh ${CLUSTER2_NAME} 245
-
-# Get the IP address of the control plan
-IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER2_NAME}-control-plane)
-
-#Change the kubeconfig file not to use the loopback IP
-kubectl config set clusters.kind-${CLUSTER2_NAME}.server https://$IP:6443
-
-# sleep 10
-# Add the self signed root certificates to both clusters so that the
-# certificates are trusted by both clusters.
-# docker cp allcerts/root-cert.pem \
-#   ${CLUSTER1_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
-# docker exec ${CLUSTER1_NAME}-control-plane update-ca-certificates
-# Restart k8s apiserver if it is needed
-# kubectl delete --context kind-${CLUSTER1_NAME} -n kube-system \
-#   pod/kube-apiserver-${CLUSTER1_NAME}-control-plane
-
-# docker cp allcerts/root-cert.pem \
-#   ${CLUSTER2_NAME}-control-plane:/usr/local/share/ca-certificates/istio-root.crt
-# docker exec ${CLUSTER2_NAME}-control-plane update-ca-certificates
-# Restart k8s apiserver if it is needed
-# kubectl delete --context kind-${CLUSTER2_NAME} -n kube-system \
-#   pod/kube-apiserver-${CLUSTER2_NAME}-control-plane 
-# sleep 10
+./setupk8s.sh -n ${CLUSTER2_NAME} -s 245
 
 # Now create the namespace in external cluster
 kubectl create --context kind-${CLUSTER1_NAME} namespace $ISTIO_NAMESPACE
