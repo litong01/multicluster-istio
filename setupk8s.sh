@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     -s|--ip-space)
       IPSPACE="$2";shift;shift;;
     *) # unknown option
-      echo "$1 is a not supported parameter"; exit 1;;
+      echo "parameter $1 is not supported"; exit 1;;
   esac
 done
 
