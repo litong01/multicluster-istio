@@ -15,6 +15,14 @@
 # NOTE:
 #    the kuberntes context is deduced from the cluster name if not given
 
+# Check prerequisites
+REQUISITES=("kubectl" "openssl")
+for item in ${REQUISITES[@]}; do
+  if [[ -z $(which ${item}) ]]; then
+    echo "${item} cannot be found on your system, please install ${item}"
+    exit 1
+  fi
+done
 
 CURRENTDIR=$(pwd)
 # Function to print the usage message

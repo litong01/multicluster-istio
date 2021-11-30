@@ -8,6 +8,14 @@
 #   3. openssl
 #   4. docker
 
+# Check prerequisites
+REQUISITES=("kubectl" "openssl" "kind" "docker")
+for item in ${REQUISITES[@]}; do
+  if [[ -z $(which ${item}) ]]; then
+    echo "${item} cannot be found on your system, please install ${item}"
+    exit 1
+  fi
+done
 
 # Function to print the usage message
 function printHelp() {
