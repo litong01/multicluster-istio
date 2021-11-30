@@ -5,7 +5,7 @@
 #
 # This script performs the following tasks:
 #    1. create a self signed root certificate if one does not exist
-#    2. create a intermediate certificates for a cluster
+#    2. create an intermediate certificate for a cluster
 #    3. create a namespace
 #    4. create a k8s generic secret to hold the intermediate certificates
 #       in the namespace created.
@@ -16,19 +16,15 @@
 #   2. openssl
 #
 # NOTE:
-#    the kuberntes context is deduced from the cluster name if not given
+#    the kubernetes context is deduced from the cluster name if not given
 #
 # Example:
-#    ./createcerts.sh --cluster-name cluster1 -namespace istio-system
+#    ./makecerts.sh --cluster-name cluster1 -namespace istio-system
 #
-# The above command will create secret named cacerts in cluster1 in namespace
-# istio-system. If the root ca exists in the working directory, it will
-# use the root cert to sign the new certificate, if not, a self signed root
-# certificate will be created.
-
-
-
-
+# The above command will create a k8s secret named cacerts in namespace
+# istio-system of cluster1. If the root ca exists in the working directory, it will
+# use the root cert to sign the created certificate, if not, a self signed root
+# certificate will be created and used.
 set -e
 
 # Check prerequisites
@@ -40,6 +36,8 @@ for item in ${REQUISITES[@]}; do
   fi
 done
 
+# The working directory will be created in the /tmp directory using the hashcode
+# of the full path of where this script gets called. 
 HASHCODE=$(openssl dgst -md5 <<< $(pwd)|cut -d ' ' -f 2)
 WORKINGDIR="/tmp/${HASHCODE}"
 
@@ -52,7 +50,7 @@ function printHelp() {
   echo "    -s|--namespace     - namespace to be created or used"
   echo "    -n|--cluster-name  - the cluster name"
   echo "    -c|--context       - kubernetes context, kind-{clustname} if not given"
-  echo "    -d|--delete        - cleanup the local generated files and keys"
+  echo "    -d|--delete        - cleanup the local generated certs and keys"
   echo "    -h|--help          - print the usage of this script"
 }
 
@@ -84,7 +82,7 @@ if [[ ${DELETE} == "TRUE" ]]; then rm -rf ${WORKINGDIR}; exit 0; fi
 # Setup default context if context is not provided.
 if [[ -z $CONTEXT && ! -z $CLUSTERNAME ]]; then CONTEXT="kind-${CLUSTERNAME}"; fi
 
-# Crete the root certificate
+# Function to create a root certificate
 function createRootCert() {
   # Create the configuration file
   rm -rf root-ca.conf
@@ -110,11 +108,12 @@ EOT
   # Create the csr file
   openssl req -new -key root-key.pem -config root-ca.conf -out root-cert.csr
 
-  # Create the certificate
+  # Create a root certificate
   openssl x509 -req -days 3650 -extensions req_ext -extfile root-ca.conf \
   -signkey root-key.pem -out root-cert.pem -in root-cert.csr
 }
 
+# Function to create an intermediate certificate
 function createIntermediateCert() {
   # Create the configuration file
   rm -rf ca.conf
@@ -154,7 +153,7 @@ EOT
   cat ca-cert.pem ../root-cert.pem > cert-chain.pem
 }
 
-# Create root key and certificate
+# Function to create root key and certificate
 function createRootKeyAndCert() {
   mkdir -p ${WORKINGDIR}
   cd ${WORKINGDIR}
@@ -173,6 +172,7 @@ function createRootKeyAndCert() {
   fi
 }
 
+# Function to create imtermediate key and cert
 function createIntermediateKeyAndCert() {
   mkdir -p ${WORKINGDIR}/${CLUSTERNAME}
   cd ${WORKINGDIR}/${CLUSTERNAME}
@@ -182,6 +182,7 @@ function createIntermediateKeyAndCert() {
   createIntermediateCert
 }
 
+# Function to create k8s secret
 function createK8SSecret() {
   set +e
   kubectl get namespace ${NAMESPACE} --context ${CONTEXT} >/dev/null 2>&1
@@ -197,7 +198,7 @@ function createK8SSecret() {
   set +e
   kubectl get secret -n ${NAMESPACE} cacerts --context ${CONTEXT} >/dev/null 2>&1
   if [[ $? == 1 ]]; then
-    # secert does not exist, create it
+    # secert does not exist in the namespace, create it
     set -e
     createRootKeyAndCert
     createIntermediateKeyAndCert

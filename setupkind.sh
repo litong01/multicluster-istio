@@ -16,6 +16,10 @@
 # 
 # The above command will create a release 1.22.1 k8s cluster named cluster1 and
 # also use metallb to setup public IP address in range xxx.xxx.255.230 - 255.240
+# Parameter --ip-octet is optional when create just one cluster, the default value
+# is 255 if not provided. When create multiple clusters, this will need to be
+# provided so that multiple clusters can use metallb allocated public IP addresses
+# to communicate with each other.
 
 set -e
 # Check prerequisites
@@ -61,8 +65,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Create k8s cluster using the giving release and name
 kind create cluster $K8SRELEASE --name $CLUSTERNAME
 
+# Verify that the command finished successfully
 if [[ $? > 0 ]]; then
   echo "Cluster creation has failed!"
   exit 1
@@ -76,6 +82,9 @@ kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/master/manife
 kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/master/manifests/metallb.yaml
 
+# The following scripts are to make sure that the kube configuration for the cluster
+# is not using loopback ip as part of the api server endpoint. Without doing this,
+# multiple clusters wont be able to interact with each other
 PREFIX=$(docker network inspect -f '{{range .IPAM.Config }}{{ .Gateway }}{{end}}' kind | cut -d '.' -f1,2)
 
 # Now configure the loadbalancer public IP range
@@ -94,6 +103,7 @@ data:
       - $PREFIX.$IPSPACE.230-$PREFIX.$IPSPACE.240
 EOF
 
+# Wait for the public IP address to become available.
 while : ; do
   IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTERNAME}-control-plane)
   if [[ ! -z $IP ]]; then
