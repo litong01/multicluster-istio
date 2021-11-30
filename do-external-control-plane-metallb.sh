@@ -18,10 +18,10 @@ fi
 
 set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh -n ${CLUSTER1_NAME} -s 244
+./setupkind.sh -n ${CLUSTER1_NAME} -s 244
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh -n ${CLUSTER2_NAME} -s 245
+./setupkind.sh -n ${CLUSTER2_NAME} -s 245
 
 # Now create the namespace in external cluster
 kubectl create --context kind-${CLUSTER1_NAME} namespace $ISTIO_NAMESPACE

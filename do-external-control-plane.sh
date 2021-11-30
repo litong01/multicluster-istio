@@ -18,7 +18,7 @@ fi
 
 set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh -n ${CLUSTER1_NAME} -s 244
+./setupkind.sh -n ${CLUSTER1_NAME} -s 244
 
 # Get the IP address of the control plan
 IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER1_NAME}-control-plane)
@@ -27,7 +27,7 @@ IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 kubectl config set clusters.kind-${CLUSTER1_NAME}.server https://${IP}:6443
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupk8s.sh -n ${CLUSTER2_NAME} -s 245
+./setupkind.sh -n ${CLUSTER2_NAME} -s 245
 
 # Get the IP address of the control plan
 IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER2_NAME}-control-plane)

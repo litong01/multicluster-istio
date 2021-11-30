@@ -1,4 +1,8 @@
-#! /bin/bash
+#!/bin/bash
+# Copyright Istio Authors
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#
 # This script performs the following tasks:
 #    1. create a self signed root certificate if one does not exist
 #    2. create a intermediate certificates for a cluster
@@ -14,6 +18,17 @@
 # NOTE:
 #    the kuberntes context is deduced from the cluster name if not given
 #
+# Example:
+#    ./createcerts.sh --cluster-name cluster1 -namespace istio-system
+#
+# The above command will create secret named cacerts in cluster1 in namespace
+# istio-system. If the root ca exists in the working directory, it will
+# use the root cert to sign the new certificate, if not, a self signed root
+# certificate will be created.
+
+
+
+
 set -e
 
 # Check prerequisites

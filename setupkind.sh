@@ -1,12 +1,21 @@
-#! /bin/bash
+#!/bin/bash
+# Copyright Istio Authors
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#
 # This script sets up a k8s cluster using kind and metallb as k8s load balancer
-# The following software must be available on your machine before running this
-# script:
+# The following software are required on your machine to run the script:
 #
 #   1. kubectl
 #   2. kind
 #   3. openssl
 #   4. docker
+#
+# Example:
+#     ./setupkind.sh --cluster-name cluster1 --k8s-release 1.22.1 --ip-octet 255
+# 
+# The above command will create a release 1.22.1 k8s cluster named cluster1 and
+# also use metallb to setup public IP address in range xxx.xxx.255.230 - 255.240
 
 set -e
 # Check prerequisites
@@ -21,12 +30,12 @@ done
 # Function to print the usage message
 function printHelp() {
   echo "Usage: "
-  echo "    $0 -n cluster1 -r 1.22.1 -s 255"
+  echo "    $0 --cluster-name cluster1 --k8s-release 1.22.1 --ip-octet 255"
   echo ""
   echo "Where:"
   echo "    -n|--cluster-name  - name of the k8s cluster to be created"
   echo "    -r|--k8s-release   - the release of the k8s to setup, latest available if not given"
-  echo "    -s|--ip-octet      - the 3rd octet for public ip addresses, 255 if not given"
+  echo "    -s|--ip-octet      - the 3rd octet for public ip addresses, 255 if not given, valid range: 0-255"
   echo "    -h|--help          - print the usage of this script"
 }
 
