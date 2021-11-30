@@ -8,6 +8,7 @@
 #   3. openssl
 #   4. docker
 
+set -e
 # Check prerequisites
 REQUISITES=("kubectl" "openssl" "kind" "docker")
 for item in ${REQUISITES[@]}; do
