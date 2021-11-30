@@ -29,8 +29,8 @@ set -e
 
 # Check prerequisites
 REQUISITES=("kubectl" "openssl")
-for item in ${REQUISITES[@]}; do
-  if [[ -z $(which ${item}) ]]; then
+for item in "${REQUISITES[@]}"; do
+  if [[ -z $(which "${item}") ]]; then
     echo "${item} cannot be found on your system, please install ${item}"
     exit 1
   fi
@@ -38,7 +38,7 @@ done
 
 # The working directory will be created in the /tmp directory using the hashcode
 # of the full path of where this script gets called. 
-HASHCODE=$(openssl dgst -md5 <<< $(pwd)|cut -d ' ' -f 2)
+HASHCODE=$(openssl dgst -md5 <<< "$(pwd)"|cut -d ' ' -f 2)
 WORKINGDIR="/tmp/${HASHCODE}"
 
 # Function to print the usage message
@@ -77,10 +77,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ${DELETE} == "TRUE" ]]; then rm -rf ${WORKINGDIR}; exit 0; fi
+if [[ ${DELETE} == "TRUE" ]]; then rm -rf "${WORKINGDIR}"; exit 0; fi
 
 # Setup default context if context is not provided.
-if [[ -z $CONTEXT && ! -z $CLUSTERNAME ]]; then CONTEXT="kind-${CLUSTERNAME}"; fi
+if [[ -z "${CONTEXT}" && -n "${CLUSTERNAME}" ]]; then CONTEXT="kind-${CLUSTERNAME}"; fi
 
 # Function to create a root certificate
 function createRootCert() {
@@ -155,8 +155,8 @@ EOT
 
 # Function to create root key and certificate
 function createRootKeyAndCert() {
-  mkdir -p ${WORKINGDIR}
-  cd ${WORKINGDIR}
+  mkdir -p "${WORKINGDIR}"
+  cd "${WORKINGDIR}"
   if [[ -f "${WORKINGDIR}/root-key.pem" ]]; then
     if [[ -f "${WORKINGDIR}/root-cert.pem" ]]; then
       echo "Both root key and cert already exist"
@@ -174,8 +174,8 @@ function createRootKeyAndCert() {
 
 # Function to create imtermediate key and cert
 function createIntermediateKeyAndCert() {
-  mkdir -p ${WORKINGDIR}/${CLUSTERNAME}
-  cd ${WORKINGDIR}/${CLUSTERNAME}
+  mkdir -p "${WORKINGDIR}/${CLUSTERNAME}"
+  cd "${WORKINGDIR}/${CLUSTERNAME}"
   # Create the  ca key named root-key.pem
   openssl genrsa -out ca-key.pem 4096
   # Create the root certificate
@@ -185,29 +185,29 @@ function createIntermediateKeyAndCert() {
 # Function to create k8s secret
 function createK8SSecret() {
   set +e
-  kubectl get namespace ${NAMESPACE} --context ${CONTEXT} >/dev/null 2>&1
+  kubectl get namespace "${NAMESPACE}" --context "${CONTEXT}" >/dev/null 2>&1
   # namespace does not exist, create it
   if [[ $? == 1 ]]; then
     echo "Creating namespace ${NAMESPACE}"
     set -e
-    kubectl create ns ${NAMESPACE} --context ${CONTEXT}
+    kubectl create ns "${NAMESPACE}" --context "${CONTEXT}"
   else
     echo "Namespace ${NAMESPACE} already exists"
   fi
 
   set +e
-  kubectl get secret -n ${NAMESPACE} cacerts --context ${CONTEXT} >/dev/null 2>&1
+  kubectl get secret -n "${NAMESPACE}" cacerts --context "${CONTEXT}" >/dev/null 2>&1
   if [[ $? == 1 ]]; then
     # secert does not exist in the namespace, create it
     set -e
     createRootKeyAndCert
     createIntermediateKeyAndCert
 
-    kubectl create secret generic cacerts -n ${NAMESPACE} --context ${CONTEXT} \
-    --from-file=${WORKINGDIR}/${CLUSTERNAME}/ca-cert.pem \
-    --from-file=${WORKINGDIR}/${CLUSTERNAME}/ca-key.pem \
-    --from-file=${WORKINGDIR}/root-cert.pem \
-    --from-file=${WORKINGDIR}/${CLUSTERNAME}/cert-chain.pem
+    kubectl create secret generic cacerts -n "${NAMESPACE}" --context "${CONTEXT}" \
+    --from-file="${WORKINGDIR}/${CLUSTERNAME}/ca-cert.pem" \
+    --from-file="${WORKINGDIR}/${CLUSTERNAME}/ca-key.pem" \
+    --from-file="${WORKINGDIR}/root-cert.pem" \
+    --from-file="${WORKINGDIR}/${CLUSTERNAME}/cert-chain.pem"
   else
     # secret already exists in the namespace
     echo "cacerts already exists in namespace ${NAMESPACE}, nothing changed."

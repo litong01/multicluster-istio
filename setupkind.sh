@@ -24,8 +24,8 @@
 set -e
 # Check prerequisites
 REQUISITES=("kubectl" "openssl" "kind" "docker")
-for item in ${REQUISITES[@]}; do
-  if [[ -z $(which ${item}) ]]; then
+for item in "${REQUISITES[@]}"; do
+  if [[ -z $(which "${item}") ]]; then
     echo "${item} cannot be found on your system, please install ${item}"
     exit 1
   fi
@@ -66,16 +66,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Create k8s cluster using the giving release and name
-kind create cluster $K8SRELEASE --name $CLUSTERNAME
-
-# Verify that the command finished successfully
-if [[ $? > 0 ]]; then
-  echo "Cluster creation has failed!"
-  exit 1
+if [[ -z "${K8SRELEASE}" ]]; then
+  kind create cluster --name "${CLUSTERNAME}"
+else
+  kind create cluster "${K8SRELEASE}" --name "${CLUSTERNAME}"
 fi
-
 # Setup cluster context
-kubectl cluster-info --context kind-$CLUSTERNAME
+kubectl cluster-info --context "kind-${CLUSTERNAME}"
 
 # Setup metallb
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/master/manifests/namespace.yaml
@@ -105,10 +102,10 @@ EOF
 
 # Wait for the public IP address to become available.
 while : ; do
-  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTERNAME}-control-plane)
-  if [[ ! -z $IP ]]; then
+  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${CLUSTERNAME}"-control-plane)
+  if [[ -n "${IP}" ]]; then
     #Change the kubeconfig file not to use the loopback IP
-    kubectl config set clusters.kind-${CLUSTERNAME}.server https://${IP}:6443
+    kubectl config set clusters.kind-"${CLUSTERNAME}".server https://"${IP}":6443
     break
   fi
   echo 'Waiting for public IP address to be available...'
