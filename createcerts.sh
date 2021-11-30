@@ -198,5 +198,5 @@ function createK8SSecret() {
   fi
 }
 
-echo "Working on cluster ${CLUSTERNAME}, namepace ${NAMESPACE}, context ${CONTEXT}"
+echo "Working on cluster ${CLUSTERNAME}, namepace ${NAMESPACE} using context ${CONTEXT}"
 createK8SSecret
