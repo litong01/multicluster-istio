@@ -20,28 +20,11 @@ set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER1_NAME} -s 244
 
-# Get the IP address of the control plan
-IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER1_NAME}-control-plane)
-
-#Change the kubeconfig file not to use the loopback IP
-kubectl config set clusters.kind-${CLUSTER1_NAME}.server https://${IP}:6443
-
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER2_NAME} -s 245
 
-# Get the IP address of the control plan
-IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CLUSTER2_NAME}-control-plane)
-
-#Change the kubeconfig file not to use the loopback IP
-kubectl config set clusters.kind-${CLUSTER2_NAME}.server https://$IP:6443
-
-# Now create the namespace in external cluster
-kubectl create --context kind-${CLUSTER1_NAME} namespace $ISTIO_NAMESPACE
-kubectl create --context kind-${CLUSTER1_NAME} secret generic cacerts -n $ISTIO_NAMESPACE \
-      --from-file=allcerts/${CLUSTER1_NAME}/ca-cert.pem \
-      --from-file=allcerts/${CLUSTER1_NAME}/ca-key.pem \
-      --from-file=allcerts/${CLUSTER1_NAME}/root-cert.pem \
-      --from-file=allcerts/${CLUSTER1_NAME}/cert-chain.pem
+# Now create the namespace in external cluster and setup istio certs
+./makecerts.sh -c kind-${CLUSTER1_NAME} -s $ISTIO_NAMESPACE -n ${CLUSTER1_NAME}
 
 # Use an istio instance to expose istio control plane
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
@@ -91,14 +74,6 @@ done
 # Create the namespace in the remote cluster
 kubectl create --context kind-${CLUSTER2_NAME} namespace $ISTIO_NAMESPACE
 kubectl --context="kind-${CLUSTER2_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network1
-kubectl create --context kind-${CLUSTER2_NAME} secret generic cacerts -n $ISTIO_NAMESPACE \
-      --from-file=allcerts/${CLUSTER2_NAME}/ca-cert.pem \
-      --from-file=allcerts/${CLUSTER2_NAME}/ca-key.pem \
-      --from-file=allcerts/${CLUSTER2_NAME}/root-cert.pem \
-      --from-file=allcerts/${CLUSTER2_NAME}/cert-chain.pem
-
-
-CA=$(cat allcerts/root-cert.pem|base64 -w0)
 
 # Setup Istio remote config cluster
 cat <<EOF | istioctl install --context="kind-${CLUSTER2_NAME}" -y -f -
@@ -120,21 +95,6 @@ spec:
       injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network1
     base:
       validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
-  components:
-    istiodRemote:
-      k8s:
-        overlays:
-        - kind: MutatingWebhookConfiguration
-          name: istio-sidecar-injector-${ISTIO_NAMESPACE}
-          patches:
-          - path: webhooks[0].clientConfig.caBundle
-            value: "${CA}"
-          - path: webhooks[1].clientConfig.caBundle
-            value: "${CA}"
-          - path: webhooks[2].clientConfig.caBundle
-            value: "${CA}"
-          - path: webhooks[3].clientConfig.caBundle
-            value: "${CA}"
 EOF
 
 # Setup the control plane in the external cluster (cluster1)
@@ -193,9 +153,9 @@ spec:
               mountPath: /var/lib/istio/inject
         env:
         - name: INJECTION_WEBHOOK_CONFIG_NAME
-          value: ""
+          value: "istio-sidecar-injector-${ISTIO_NAMESPACE}"
         - name: VALIDATION_WEBHOOK_CONFIG_NAME
-          value: ""
+          value: "istio-validator-${ISTIO_NAMESPACE}"
         - name: EXTERNAL_ISTIOD
           value: "true"
         - name: CLUSTER_ID
@@ -278,8 +238,6 @@ exit 0
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 ISTIO_NAMESPACE=external-istiod
-EXTERNAL_ISTIOD_ADDR=$(kubectl get --context kind-${CLUSTER1_NAME} -n $ISTIO_NAMESPACE \
-  services/istio-endpoint-service -o jsonpath='{ .status.loadBalancer.ingress[0].ip}')
 
 kubectl get --context=kind-${CLUSTER1_NAME} -n $ISTIO_NAMESPACE all
 
@@ -291,13 +249,13 @@ kubectl logs --context=kind-${CLUSTER1_NAME} -n $ISTIO_NAMESPACE $PODID
 kubectl create --context="kind-${CLUSTER2_NAME}" namespace sample
 kubectl label --context="kind-${CLUSTER2_NAME}" namespace sample istio-injection=enabled
 
-kubectl apply -f samples/helloworld/helloworld.yaml -l service=helloworld \
+kubectl apply -f verification/helloworld.yaml -l service=helloworld \
     -n sample --context="kind-${CLUSTER2_NAME}"
 
-kubectl apply -f samples/helloworld/helloworld.yaml -l version=v1 \
+kubectl apply -f verification/helloworld.yaml -l version=v1 \
     -n sample --context="kind-${CLUSTER2_NAME}"
 
-kubectl apply -f samples/sleep/sleep.yaml -n sample --context="kind-${CLUSTER2_NAME}"
+kubectl apply -f verification/sleep.yaml -n sample --context="kind-${CLUSTER2_NAME}"
 
 kubectl exec --context="kind-${CLUSTER2_NAME}" -n sample -c sleep \
     "$(kubectl get pod --context="kind-${CLUSTER2_NAME}" -n sample -l app=sleep -o jsonpath='{.items[0].metadata.name}')" \

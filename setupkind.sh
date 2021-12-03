@@ -22,6 +22,7 @@
 # to communicate with each other.
 
 set -e
+
 # Check prerequisites
 REQUISITES=("kubectl" "openssl" "kind" "docker")
 for item in "${REQUISITES[@]}"; do
