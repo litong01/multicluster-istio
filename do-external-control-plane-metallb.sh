@@ -69,7 +69,7 @@ kubectl create --context kind-${CLUSTER2_NAME} namespace $ISTIO_NAMESPACE
 kubectl --context="kind-${CLUSTER2_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network1
 
 # Setup Istio remote config cluster
-cat <<EOF | istioctl install --context="kind-${CLUSTER2_NAME}" -y -f -
+istioctl install --context="kind-${CLUSTER2_NAME}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:

@@ -31,7 +31,7 @@ kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
 
 # Setup a gateway in the external cluster
 # Create the istio gateway in istio-system namespace of the external cluster
-cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -
+istioctl install --context="kind-${CLUSTER1_NAME}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
@@ -76,7 +76,7 @@ kubectl create --context kind-${CLUSTER2_NAME} namespace $ISTIO_NAMESPACE
 kubectl --context="kind-${CLUSTER2_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network1
 
 # Setup Istio remote config cluster
-cat <<EOF | istioctl install --context="kind-${CLUSTER2_NAME}" -y -f -
+istioctl install --context="kind-${CLUSTER2_NAME}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
@@ -111,7 +111,7 @@ istioctl x create-remote-secret  --context="kind-${CLUSTER2_NAME}" \
   --create-service-account=false | kubectl apply -f - --context="kind-${CLUSTER1_NAME}"
 
 # Setup the control plane in external cluster
-cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -
+istioctl install --context="kind-${CLUSTER1_NAME}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
@@ -172,7 +172,7 @@ EOF
 
 # Create Istio Gateway, VirtualService and DestinationRule configuration to
 # route traffic from the ingress gateway to the external control plane:
-cat <<EOF | kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
+kubectl apply --context="kind-${CLUSTER1_NAME}" -f - <<EOF
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
