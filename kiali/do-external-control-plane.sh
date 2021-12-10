@@ -134,7 +134,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $1:$2
+        replacement: "$1:$2"
         source_labels:
         - __address__
         - __meta_kubernetes_service_annotation_prometheus_io_port
@@ -173,7 +173,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $1:$2
+        replacement: "$1:$2"
         source_labels:
         - __address__
         - __meta_kubernetes_service_annotation_prometheus_io_port
@@ -251,7 +251,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $1:$2
+        replacement: "$1:$2"
         source_labels:
         - __address__
         - __meta_kubernetes_pod_annotation_prometheus_io_port
@@ -291,7 +291,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $1:$2
+        replacement: "$1:$2"
         source_labels:
         - __address__
         - __meta_kubernetes_pod_annotation_prometheus_io_port
