@@ -7,10 +7,16 @@
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 ISTIO_NAMESPACE=external-istiod
+ACTION=apply
+
+if [[ $1 != '' ]]; then
+  ACTION=delete
+fi
+
 
 # install prometheus and configure it to scrape from remote cluster
 # the prometheus will be installed onto cluster1 and external-istiod namespace
-kubectl apply --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f - <<EOF
+kubectl ${ACTION} --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f - <<EOF
 ---
 # Source: prometheus/templates/server/serviceaccount.yaml
 apiVersion: v1
@@ -505,7 +511,7 @@ spec:
 EOF
 
 
-kubectl apply --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f - <<EOF
+kubectl ${ACTION} --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f - <<EOF
 ---
 # Source: kiali-server/templates/serviceaccount.yaml
 apiVersion: v1
@@ -585,6 +591,10 @@ data:
       version_label: v1.42.0
       view_only_mode: false
     external_services:
+      istio:
+        url_service_version: http://istio-pilot.${ISTIO_NAMESPACE}:8080/version
+      prometheus:
+        url: http://prometheus.${ISTIO_NAMESPACE}:9090
       custom_dashboards:
         enabled: true
     identity:
@@ -1038,7 +1048,7 @@ spec:
 ...
 EOF
 
-kubectl apply --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f - <<EOF
+kubectl ${ACTION} --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f - <<EOF
 apiVersion: v1
 kind: Service
 metadata:
