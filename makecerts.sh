@@ -174,8 +174,13 @@ function createRootKeyAndCert() {
 
 # Function to create imtermediate key and cert
 function createIntermediateKeyAndCert() {
+  if [[ -f "${WORKINGDIR}/${CLUSTERNAME}/ca-key.pem" ]]; then
+      echo "CA key already exist"
+      return
+  fi
   mkdir -p "${WORKINGDIR}/${CLUSTERNAME}"
   cd "${WORKINGDIR}/${CLUSTERNAME}"
+
   # Create the  ca key named root-key.pem
   openssl genrsa -out ca-key.pem 4096
   # Create the root certificate

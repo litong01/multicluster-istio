@@ -1,4 +1,5 @@
 #!/bin/bash
+# this script verify istio using two clusters
 
 ColorOff='\033[0m'        # Text Reset
 Black='\033[0;30m'        # Black

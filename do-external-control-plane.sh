@@ -23,11 +23,13 @@ set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER2_NAME} -s 245
 
-# Now create the namespace in external cluster and setup istio certs
-./makecerts.sh -c kind-${CLUSTER1_NAME} -s $ISTIO_NAMESPACE -n ${CLUSTER1_NAME}
 
 # Use an istio instance to expose istio control plane
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
+
+# Now create the namespace in external cluster and setup istio certs
+./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
+./makecerts.sh -c kind-${CLUSTER1_NAME} -s $ISTIO_NAMESPACE -n ${CLUSTER1_NAME}
 
 # Setup a gateway in the external cluster
 # Create the istio gateway in istio-system namespace of the external cluster
