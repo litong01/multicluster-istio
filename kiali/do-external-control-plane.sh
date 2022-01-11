@@ -9,9 +9,15 @@ CLUSTER2_NAME=cluster2
 ISTIO_NAMESPACE=external-istiod
 ACTION=apply
 
-if [[ $1 != '' ]]; then
+if [[ $PART1 != '' ]]; then
   ACTION=delete
 fi
+
+
+# Doing this is to escape the bash variable replacement of $1 and $2, not doing this
+# will result $1 and $2 being replaced by bash as empty string which results wrong urls
+PART1=$(echo "\$1")
+PART2=$(echo "\$2")
 
 # Install prometheus and configure it to scrape in the remote cluster
 # this prometheus will be installed onto cluster2, external-istiod namespace
@@ -88,7 +94,7 @@ data:
       - replacement: kubernetes.default.svc:443
         target_label: __address__
       - regex: (.+)
-        replacement: /api/v1/nodes/$1/proxy/metrics
+        replacement: /api/v1/nodes/$PART1/proxy/metrics
         source_labels:
         - __meta_kubernetes_node_name
         target_label: __metrics_path__
@@ -106,7 +112,7 @@ data:
       - replacement: kubernetes.default.svc:443
         target_label: __address__
       - regex: (.+)
-        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+        replacement: /api/v1/nodes/$PART1/proxy/metrics/cadvisor
         source_labels:
         - __meta_kubernetes_node_name
         target_label: __metrics_path__
@@ -134,7 +140,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: "$1:$2"
+        replacement: "$PART1:$PART2"
         source_labels:
         - __address__
         - __meta_kubernetes_service_annotation_prometheus_io_port
@@ -173,7 +179,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: "$1:$2"
+        replacement: "$PART1:$PART2"
         source_labels:
         - __address__
         - __meta_kubernetes_service_annotation_prometheus_io_port
@@ -251,7 +257,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: "$1:$2"
+        replacement: "$PART1:$PART2"
         source_labels:
         - __address__
         - __meta_kubernetes_pod_annotation_prometheus_io_port
@@ -290,7 +296,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: "$1:$2"
+        replacement: "$PART1:$PART2"
         source_labels:
         - __address__
         - __meta_kubernetes_pod_annotation_prometheus_io_port
@@ -614,7 +620,7 @@ data:
       - replacement: kubernetes.default.svc:443
         target_label: __address__
       - regex: (.+)
-        replacement: /api/v1/nodes/$1/proxy/metrics
+        replacement: /api/v1/nodes/$PART1/proxy/metrics
         source_labels:
         - __meta_kubernetes_node_name
         target_label: __metrics_path__
@@ -632,7 +638,7 @@ data:
       - replacement: kubernetes.default.svc:443
         target_label: __address__
       - regex: (.+)
-        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+        replacement: /api/v1/nodes/$PART1/proxy/metrics/cadvisor
         source_labels:
         - __meta_kubernetes_node_name
         target_label: __metrics_path__
@@ -660,7 +666,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: "$1:$2"
+        replacement: "$PART1:$PART2"
         source_labels:
         - __address__
         - __meta_kubernetes_service_annotation_prometheus_io_port
@@ -699,7 +705,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: "$1:$2"
+        replacement: "$PART1:$PART2"
         source_labels:
         - __address__
         - __meta_kubernetes_service_annotation_prometheus_io_port
@@ -777,7 +783,7 @@ data:
         target_label: __metrics_path__
       - action: replace
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: "$1:$2"
+        replacement: "$PART1:$PART2"
         source_labels:
         - __address__
         - __meta_kubernetes_pod_annotation_prometheus_io_port
