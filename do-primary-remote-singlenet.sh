@@ -31,22 +31,13 @@ kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
 # kubectl --context="kind-${CLUSTER1_NAME}" label namespace istio-system topology.istio.io/network=network1
 
 #Now setup the cacerts
-kubectl create --context kind-${CLUSTER1_NAME} secret generic cacerts -n istio-system \
-      --from-file=allcerts/${CLUSTER1_NAME}/ca-cert.pem \
-      --from-file=allcerts/${CLUSTER1_NAME}/ca-key.pem \
-      --from-file=allcerts/${CLUSTER1_NAME}/root-cert.pem \
-      --from-file=allcerts/${CLUSTER1_NAME}/cert-chain.pem
+./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
-# kubectl --context="kind-${CLUSTER2_NAME}" label namespace istio-system topology.istio.io/network=network1
 
 #Now setup the cacerts
-kubectl create --context kind-${CLUSTER2_NAME} secret generic cacerts -n istio-system \
-      --from-file=allcerts/${CLUSTER2_NAME}/ca-cert.pem \
-      --from-file=allcerts/${CLUSTER2_NAME}/ca-key.pem \
-      --from-file=allcerts/${CLUSTER2_NAME}/root-cert.pem \
-      --from-file=allcerts/${CLUSTER2_NAME}/cert-chain.pem
+./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
 
 # Install istio onto the first cluster
 cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -
