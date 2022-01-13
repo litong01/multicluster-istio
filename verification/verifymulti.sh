@@ -11,8 +11,11 @@ SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 
-kubectl create --context="kind-${CLUSTER1_NAME}" namespace sample
-kubectl create --context="kind-${CLUSTER2_NAME}" namespace sample
+kubectl create --context="kind-${CLUSTER1_NAME}" namespace sample --dry-run=client -o yaml \
+    | kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
+kubectl create --context="kind-${CLUSTER2_NAME}" namespace sample --dry-run=client -o yaml \
+    | kubectl apply --context="kind-${CLUSTER2_NAME}" -f -
+
 
 kubectl label --context="kind-${CLUSTER1_NAME}" namespace sample \
     istio-injection=enabled
