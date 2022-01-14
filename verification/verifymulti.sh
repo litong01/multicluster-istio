@@ -18,9 +18,9 @@ kubectl create --context="kind-${CLUSTER2_NAME}" namespace sample --dry-run=clie
 
 
 kubectl label --context="kind-${CLUSTER1_NAME}" namespace sample \
-    istio-injection=enabled
+    --overwrite istio-injection=enabled
 kubectl label --context="kind-${CLUSTER2_NAME}" namespace sample \
-    istio-injection=enabled
+    --overwrite istio-injection=enabled
 
 kubectl apply --context="kind-${CLUSTER1_NAME}" \
     -f $SRCDIR/helloworld.yaml -l service=helloworld -n sample

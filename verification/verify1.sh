@@ -6,6 +6,8 @@ Black='\033[0;30m'        # Black
 Red='\033[0;31m'          # Red
 Green='\033[0;32m'        # Green
 
+SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 # Use the env variable to set up context, if not, use kind-cluster2
 # as the context
 CTX_CLUSTER=${CTX_CLUSTER:-kind-cluster2}
@@ -20,18 +22,18 @@ kubectl label --context="${CTX_CLUSTER}" namespace sample \
 
 # Create hello world services in each cluster
 kubectl apply --context="${CTX_CLUSTER}" \
-    -f helloworld.yaml -l service=helloworld -n sample
+    -f $SRCDIR/helloworld.yaml -l service=helloworld -n sample
 
 # Deploy hello world V1 in the cluster
 kubectl apply --context="${CTX_CLUSTER}" \
-    -f helloworld.yaml -l version=v1 -n sample
+    -f $SRCDIR/helloworld.yaml -l version=v1 -n sample
 
 # Deploy hello world V1 in the cluster
 kubectl apply --context="${CTX_CLUSTER}" \
-    -f helloworld.yaml -l version=v2 -n sample
+    -f $SRCDIR/helloworld.yaml -l version=v2 -n sample
 
 # Deploy the sleep app for checking the hello world app
-kubectl apply --context="${CTX_CLUSTER}" -f sleep.yaml -n sample
+kubectl apply --context="${CTX_CLUSTER}" -f $SRCDIR/sleep.yaml -n sample
 
 # Wait for the pod to be ready in the first cluster
 kubectl wait --context="${CTX_CLUSTER}" -n sample pod \
