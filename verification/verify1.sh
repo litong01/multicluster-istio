@@ -37,7 +37,10 @@ kubectl apply --context="${CTX_CLUSTER}" -f $SRCDIR/sleep.yaml -n sample
 
 # Wait for the pod to be ready in the first cluster
 kubectl wait --context="${CTX_CLUSTER}" -n sample pod \
-  -l app=sleep --for=condition=Ready --timeout=60s
+  -l app=sleep --for=condition=Ready --timeout=120s
+
+kubectl wait --context="${CTX_CLUSTER}" -n sample pod \
+  -l app=helloworld --for=condition=Ready --timeout=120s
 
 # Get the pod name in the first cluster
 PODNAME=$(kubectl get pod --context="${CTX_CLUSTER}" -n sample -l \

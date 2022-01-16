@@ -57,6 +57,10 @@ spec:
           - name: tls-webhook
             port: 15017
             targetPort: 15017
+  values:
+    global:
+      logging:
+        level: "default:debug"
 EOF
 
 # Wait for the public IP address to be allocated
@@ -113,6 +117,12 @@ istioctl x create-remote-secret  --context="kind-${CLUSTER2_NAME}" \
   --create-service-account=false | kubectl apply -f - --context="kind-${CLUSTER1_NAME}"
 
 # Setup the control plane in external cluster
+# NOTE: This setup purposely disabled the validating webhook because that the
+# web hook will be enabled by the first instance of istiod (in istio-system namespace)
+# which will fail due to the istiod in external-istiod namespace has not become
+# available yet, so the installation fails. Disabling this will make sure that
+# the installation is successful and the validation will be done by the first
+# instance of istiod in istio-system namespace.
 istioctl install --context="kind-${CLUSTER1_NAME}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -132,6 +142,13 @@ spec:
       enabled: true
       k8s:
         overlays:
+        - kind: ValidatingWebhookConfiguration
+          name: istio-validator-$ISTIO_NAMESPACE
+          patches:
+          - path: webhooks[0].objectSelector.matchExpressions[0].operator
+            value: DoesNotExist
+          - path: webhooks[0].objectSelector.matchExpressions[0].values
+            value: []
         - kind: Deployment
           name: istiod
           patches:
