@@ -9,7 +9,7 @@ CLUSTER2_NAME=cluster2
 ISTIO_NAMESPACE=external-istiod
 ACTION=apply
 
-if [[ $PART1 != '' ]]; then
+if [[ $1 != '' ]]; then
   ACTION=delete
 fi
 
@@ -80,6 +80,9 @@ data:
         - __meta_kubernetes_namespace
         - __meta_kubernetes_service_name
         - __meta_kubernetes_endpoint_port_name
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -98,6 +101,9 @@ data:
         source_labels:
         - __meta_kubernetes_node_name
         target_label: __metrics_path__
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -116,6 +122,9 @@ data:
         source_labels:
         - __meta_kubernetes_node_name
         target_label: __metrics_path__
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -159,6 +168,9 @@ data:
         source_labels:
         - __meta_kubernetes_pod_node_name
         target_label: kubernetes_node
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
     - job_name: kubernetes-service-endpoints-slow
       kubernetes_sd_configs:
       - role: endpoints
@@ -198,6 +210,9 @@ data:
         source_labels:
         - __meta_kubernetes_pod_node_name
         target_label: kubernetes_node
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
       scrape_interval: 5m
       scrape_timeout: 30s
     - honor_labels: true
@@ -209,6 +224,9 @@ data:
         regex: pushgateway
         source_labels:
         - __meta_kubernetes_service_annotation_prometheus_io_probe
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
     - job_name: kubernetes-services
       kubernetes_sd_configs:
       - role: service
@@ -237,6 +255,9 @@ data:
       - source_labels:
         - __meta_kubernetes_service_name
         target_label: kubernetes_name
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
     - job_name: kubernetes-pods
       kubernetes_sd_configs:
       - role: pod
@@ -276,6 +297,9 @@ data:
         regex: Pending|Succeeded|Failed|Completed
         source_labels:
         - __meta_kubernetes_pod_phase
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
     - job_name: kubernetes-pods-slow
       kubernetes_sd_configs:
       - role: pod
@@ -315,6 +339,9 @@ data:
         regex: Pending|Succeeded|Failed|Completed
         source_labels:
         - __meta_kubernetes_pod_phase
+      - source_labels: [__address__]
+        target_label: kiali_show
+        replacement: "kiali-dashboard"
       scrape_interval: 5m
       scrape_timeout: 30s
   recording_rules.yml: |
@@ -592,6 +619,16 @@ data:
       - targets:
         - localhost:9090
     - job_name: prometheus_remote
+      static_configs:
+      - targets:
+        - ${PROMETHEUS_ADDR}:20002
+    - job_name: istio_external
+      scrape_interval: 5s
+      honor_labels: true
+      metrics_path: '/federate'
+      params:
+        'match[]':
+        - '{kiali_show="kiali-dashboard"}'
       static_configs:
       - targets:
         - ${PROMETHEUS_ADDR}:20002
