@@ -13,6 +13,7 @@ if [[ $1 != '' ]]; then
   ACTION=delete
 fi
 
+SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # Doing this is to escape the bash variable replacement of $1 and $2, not doing this
 # will result $1 and $2 being replaced by bash as empty string which results wrong urls
@@ -1639,4 +1640,29 @@ spec:
   - name: uiport
     port: 20001
     targetPort: 20001
+EOF
+
+# Setup grafana
+echo "Setting up grafana..."
+# Fix up the namespace issue
+sed "s/istio-system/$ISTIO_NAMESPACE/" ${SRCDIR}/grafana.yaml > /tmp/grafana.yaml
+kubectl ${ACTION} --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f /tmp/grafana.yaml
+
+
+# Create load balancer for grafana dashboard
+echo "Create load balancer for grafana dashboard..."
+kubectl ${ACTION} --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-endpoint-service
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/instance: grafana
+    app.kubernetes.io/name: grafana
+  ports:
+  - name: uiport
+    port: 20004
+    targetPort: 3000
 EOF

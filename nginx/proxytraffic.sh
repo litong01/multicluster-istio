@@ -20,8 +20,8 @@ fi
 
 declare -A ALL
 ALL=(
-    [clusters]='kind-cluster1,kind-cluster1,kind-cluster2'
-    [services]='kiali-endpoint-service,prometheus-endpoint-service,prometheus-endpoint-service'
+    [clusters]='kind-cluster1,kind-cluster1,kind-cluster2,kind-cluster1'
+    [services]='kiali-endpoint-service,prometheus-endpoint-service,prometheus-endpoint-service,grafana-endpoint-service'
 )
 cmds='clusters services'
 
@@ -58,6 +58,8 @@ for aservice in "${Services[@]}"; do
     ${aservice} -o jsonpath='{ .status.loadBalancer.ingress[0].ip }')
   LB_PORT=$(kubectl get --context ${Clusters[$index]} -n $ISTIO_NAMESPACE services \
     ${aservice} -o jsonpath='{ .spec.ports[0].port }')
+
+  echo "${LB_IP}:${LB_PORT}"
 
   cat <<EOF >> /tmp/istioproxy.conf
   
