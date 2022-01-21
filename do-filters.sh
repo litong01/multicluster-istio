@@ -24,7 +24,7 @@ fi
 # The command to get these envoy filters
 # yq eval 'select(.kind=="EnvoyFilter")' Pilot.yaml
 
-docker run -v /tmp/istiogen/Base:/workdir mikefarah/yq \
+docker run rm -v /tmp/istiogen/Base:/workdir mikefarah/yq \
   eval 'select(.kind=="EnvoyFilter")' /workdir/Pilot/Pilot.yaml \
   > /tmp/istiogen/filters.yaml
 
