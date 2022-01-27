@@ -24,7 +24,7 @@
 set -e
 
 # Check prerequisites
-REQUISITES=("kubectl" "openssl" "kind" "docker")
+REQUISITES=("kubectl" "kind" "docker")
 for item in "${REQUISITES[@]}"; do
   if [[ -z $(which "${item}") ]]; then
     echo "${item} cannot be found on your system, please install ${item}"
