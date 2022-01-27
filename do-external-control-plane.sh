@@ -33,6 +33,9 @@ kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
 
 # Setup a gateway in the external cluster
 # Create the istio gateway in istio-system namespace of the external cluster
+# Notice the section of pilot->k8s->env which purposely set the values to be
+# empty to make sure that the validating and inject webhooks are disabled in
+# the external control plane
 istioctl install --context="kind-${CLUSTER1_NAME}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
