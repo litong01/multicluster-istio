@@ -57,6 +57,13 @@ spec:
           - name: tls-webhook
             port: 15017
             targetPort: 15017
+    pilot:
+      k8s:
+        env:
+        - name: INJECTION_WEBHOOK_CONFIG_NAME
+          value: ""
+        - name: VALIDATION_WEBHOOK_CONFIG_NAME
+          value: ""
   values:
     global:
       logging:
@@ -142,13 +149,6 @@ spec:
       enabled: true
       k8s:
         overlays:
-        - kind: ValidatingWebhookConfiguration
-          name: istio-validator-$ISTIO_NAMESPACE
-          patches:
-          - path: webhooks[0].objectSelector.matchExpressions[0].operator
-            value: DoesNotExist
-          - path: webhooks[0].objectSelector.matchExpressions[0].values
-            value: []
         - kind: Deployment
           name: istiod
           patches:
