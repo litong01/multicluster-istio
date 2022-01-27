@@ -77,7 +77,7 @@ kubectl cluster-info --context "kind-${CLUSTERNAME}"
 
 # Setup metallb
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/master/manifests/namespace.yaml
-kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$RANDOM-$RANDOM-$RANDOM-$RANDOM-$RANDOM"
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/master/manifests/metallb.yaml
 
 # The following scripts are to make sure that the kube configuration for the cluster
