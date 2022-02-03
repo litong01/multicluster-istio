@@ -8,8 +8,7 @@
 #
 #   1. kubectl
 #   2. kind
-#   3. openssl
-#   4. docker
+#   3. docker
 #
 # Example:
 #     ./setupkind.sh --cluster-name cluster1 --k8s-release 1.22.1 --ip-octet 255
@@ -98,7 +97,7 @@ data:
     - name: default
       protocol: layer2
       addresses:
-      - $PREFIX.$IPSPACE.230-$PREFIX.$IPSPACE.240
+      - $PREFIX.$IPSPACE.200-$PREFIX.$IPSPACE.240
 EOF
 
 # Wait for the public IP address to become available.
