@@ -20,8 +20,8 @@ fi
 
 declare -A ALL
 ALL=(
-    [clusters]='kind-cluster1,kind-cluster1,kind-cluster2,kind-cluster1'
-    [services]='kiali-endpoint-service,prometheus-endpoint-service,prometheus-endpoint-service,grafana-endpoint-service'
+    [clusters]='kind-cluster1,kind-cluster2,kind-cluster2'
+    [services]='kiali-endpoint-service,prometheus-endpoint-service,grafana-endpoint-service'
 )
 cmds='clusters services'
 
