@@ -40,13 +40,14 @@ function printHelp() {
   echo "    -n|--cluster-name  - name of the k8s cluster to be created"
   echo "    -r|--k8s-release   - the release of the k8s to setup, latest available if not given"
   echo "    -s|--ip-octet      - the 3rd octet for public ip addresses, 255 if not given, valid range: 0-255"
+  echo "    -d|--delete        - delete cluster or all kind clusters"
   echo "    -h|--help          - print the usage of this script"
 }
 
 # Setup default values
-CLUSTERNAME="cluster1"
 K8SRELEASE=""
 IPSPACE=255
+ACTION=""
 
 # Handling parameters
 while [[ $# -gt 0 ]]; do
@@ -60,10 +61,31 @@ while [[ $# -gt 0 ]]; do
       K8SRELEASE="--image=kindest/node:v$2";shift;shift;;
     -s|--ip-space)
       IPSPACE="$2";shift;shift;;
+    -d|--delete)
+      ACTION="DEL";shift;;
     *) # unknown option
       echo "parameter $1 is not supported"; exit 1;;
   esac
 done
+
+if [[ "$ACTION" == "DEL" ]]; then
+  if [[ -z "${CLUSTERNAME}" ]]; then
+    # delete every cluster
+    allnames=$(kind get clusters)
+    allclusters=($allnames)
+    for acluster in "${allclusters[@]}"; do
+        kind delete cluster --name ${acluster}
+    done
+  else
+    # delete specified cluster
+    kind delete cluster --name ${CLUSTERNAME}
+  fi
+  exit 0
+fi
+
+if [[ -z "${CLUSTERNAME}" ]]; then
+  CLUSTERNAME="cluster1"
+fi
 
 # Create k8s cluster using the giving release and name
 if [[ -z "${K8SRELEASE}" ]]; then
