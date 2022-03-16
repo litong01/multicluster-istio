@@ -60,6 +60,7 @@ function loadImagesToCluster() {
 if [[ -z "${SOURCETAG}" ]]; then
   getImageTag 'istio/pilot*'
   getImageTag 'istio/proxyv2*'
+  getImageTag 'istio/operator*'
 else
   SOURCETAGS+=($SOURCETAG)
 fi
