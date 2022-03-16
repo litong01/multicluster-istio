@@ -52,7 +52,7 @@ function getImageTag() {
 
 function loadImagesToCluster() {
   for image in "${SOURCETAGS[@]}"; do
-    echo "Ready to load image ${image} to $1..."
+    echo "Loading image ${image} to $1..."
     kind load docker-image ${image} --name $1 -q
   done
 }
