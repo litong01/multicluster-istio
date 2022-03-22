@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pathecho
+  labels:
+    app: pathecho
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pathecho
+  template:
+    metadata:
+      labels:
+        app: pathecho
+    spec:
+      containers:
+      - name: pathechov1
+        image: email4tong/pathecho:v1.0.0
+        env:
+        - name: PORT
+          value: "8080"
+        ports:
+        - containerPort: 8080
+      - name: pathechov2
+        image: email4tong/pathecho:v1.0.0
+        env:
+        - name: PORT
+          value: "8090"
+        ports:
+        - containerPort: 8090
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pathecho
+spec:
+  selector:
+    app: pathecho
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+    name: port8080
+  - protocol: TCP
+    port: 8090
+    targetPort: 8090
+    name: port8090
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: pathecho-gw
+spec:
+  selector:
+    istio: ingressgateway
+    app: istio-ingressgateway
+  servers:
+  - port:
+      number: 80
+      protocol: http
+      name: tongservice
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+   name: pathecho-vs
+spec:
+    hosts:
+    - "*"
+    gateways:
+    - pathecho-gw
+    http:
+    - match:
+      - uri:
+          prefix: /v1
+      route:
+      - destination:
+          host: pathecho
+          port:
+            number: 8080
+    - match:
+      - uri:
+          prefix: /v2
+      route:
+      - destination:
+          host: pathecho
+          port:
+            number: 8090
+
