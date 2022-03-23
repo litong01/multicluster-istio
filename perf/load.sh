@@ -5,14 +5,16 @@ function printHelp() {
   echo "    $0 --namespace cluster1"
   echo ""
   echo "Where:"
-  echo "    -n|--namespace  - name of the k8s cluster to be created"
-  echo "    -d|--delete        - delete cluster or all kind clusters"
-  echo "    -h|--help          - print the usage of this script"
+  echo "    -n|--namespace  - namespace of the load"
+  echo "    -d|--delete     - delete the workload"
+  echo "    -e|--endpoint   - endpoint of the access"
+  echo "    -h|--help       - print the usage of this script"
 }
 
 # Setup default values
 NAMESPACE=""
 ACTION="apply"
+ENDPOINT=""
 
 # Handling parameters
 while [[ $# -gt 0 ]]; do
@@ -22,6 +24,8 @@ while [[ $# -gt 0 ]]; do
       printHelp; exit 0;;
     -n|--namespace)
       NAMESPACE="$2";shift;shift;;
+    -e|--endpoint)
+      ENDPOINT="$2";shift:shift;;
     -d|--delete)
       ACTION="delete";shift;;
     *) # unknown option
@@ -38,6 +42,15 @@ if [[ "${ACTION}" == "apply" ]]; then
   kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml \
     | kubectl apply -f -
   kubectl label namespace ${NAMESPACE} istio-injection=enabled --overwrite
+fi
+
+if [[ -z "${ENDPOINT}" ]]; then
+  ENDPOINT=$(kubectl get -n istio-system \
+    services/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].ip}')
+  if [[ -z "${ENDPOINT}" ]]; then
+    ENDPOINT=$(kubectl get -n istio-system \
+      services/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+  fi
 fi
 
 # Create or delete Istio resources
@@ -57,6 +70,7 @@ spec:
     metadata:
       labels:
         app: pathecho
+        app.kubernetes.io/group: test
     spec:
       containers:
       - name: pathechov1
@@ -64,6 +78,8 @@ spec:
         env:
         - name: PORT
           value: "8080"
+        - name: DOLOG
+          value: "False"
         ports:
         - containerPort: 8080
       - name: pathechov2
@@ -71,6 +87,8 @@ spec:
         env:
         - name: PORT
           value: "8090"
+        - name: DOLOG
+          value: "False"
         ports:
         - containerPort: 8090
 
@@ -108,6 +126,7 @@ spec:
     metadata:
       labels:
         app: pathecho-label
+        app.kubernetes.io/group: test
     spec:
       containers:
       - name: pathechov1
@@ -115,6 +134,8 @@ spec:
         env:
         - name: PORT
           value: "8080"
+        - name: DOLOG
+          value: "False"
         ports:
         - containerPort: 8080
       - name: pathechov2
@@ -122,6 +143,8 @@ spec:
         env:
         - name: PORT
           value: "8090"
+        - name: DOLOG
+          value: "False"
         ports:
         - containerPort: 8090
 
@@ -217,6 +240,80 @@ spec:
           number: 8090
       weight: 50
 EOF
+
+if [[ "${ACTION}" == "apply" ]]; then
+   # wait for the pods to be ready
+   kubectl wait -n ${NAMESPACE} pod -l app.kubernetes.io/group=test --for=condition=Ready --timeout=30s
+fi
+
+cat << EOF | kubectl ${ACTION} -n "${NAMESPACE}" -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: client
+  name: client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client
+  template:
+    metadata:
+      labels:
+        app: client
+      annotations:
+        sidecar.istio.io/inject: "false"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+      - args:
+        - load
+        - -allow-initial-errors
+        - -t
+        - "0"
+        - -timeout
+        - "3000ms"
+        - -qps
+        - "10"
+        - -H
+        - "Host: pathecho.${NAMESPACE}"
+        - "http://${ENDPOINT}/v1"
+        image: fortio/fortio:1.17.0
+        imagePullPolicy: IfNotPresent
+        name: fortiov1
+      - args:
+        - load
+        - -allow-initial-errors
+        - -t
+        - "0"
+        - -timeout
+        - "3000ms"
+        - -qps
+        - "10"
+        - -H
+        - "Host: pathecho.${NAMESPACE}"
+        - "http://${ENDPOINT}/v2"
+        image: fortio/fortio:1.17.0
+        imagePullPolicy: IfNotPresent
+        name: fortiov2
+      - args:
+        - load
+        - -allow-initial-errors
+        - -t
+        - "0"
+        - -timeout
+        - "3000ms"
+        - -qps
+        - "10"
+        - -H
+        - "Host: pathecho.${NAMESPACE}"
+        - "http://${ENDPOINT}/whatever"
+        image: fortio/fortio:1.17.0
+        imagePullPolicy: IfNotPresent
+        name: fortioallother
+EOF
+
 
 # if it is delete action, remove the namespace the last
 if [[ "${ACTION}" == "delete" && "${NAMESPACE}" != "default" ]]; then
