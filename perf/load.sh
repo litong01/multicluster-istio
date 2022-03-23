@@ -1,3 +1,47 @@
+#!/bin/bash
+
+function printHelp() {
+  echo "Usage: "
+  echo "    $0 --namespace cluster1"
+  echo ""
+  echo "Where:"
+  echo "    -n|--namespace  - name of the k8s cluster to be created"
+  echo "    -d|--delete        - delete cluster or all kind clusters"
+  echo "    -h|--help          - print the usage of this script"
+}
+
+# Setup default values
+NAMESPACE=""
+ACTION="apply"
+
+# Handling parameters
+while [[ $# -gt 0 ]]; do
+  optkey="$1"
+  case $optkey in
+    -h|--help)
+      printHelp; exit 0;;
+    -n|--namespace)
+      NAMESPACE="$2";shift;shift;;
+    -d|--delete)
+      ACTION="delete";shift;;
+    *) # unknown option
+      echo "parameter $1 is not supported"; exit 1;;
+  esac
+done
+
+# If namespace is not specified, then use the default namespace
+if [[ -z "${NAMESPACE}" ]]; then
+   NAMESPACE="default"
+fi
+
+if [[ "${ACTION}" == "apply" ]]; then
+  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml \
+    | kubectl apply -f -
+  kubectl label namespace ${NAMESPACE} istio-injection=enabled --overwrite
+fi
+
+# Create or delete Istio resources
+cat << EOF | kubectl ${ACTION} -n "${NAMESPACE}" -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -145,7 +189,7 @@ metadata:
   name: pathecho-vs
 spec:
   hosts:
-  - "*"
+  - "pathecho.${NAMESPACE}"
   gateways:
   - pathecho-gw
   http:
@@ -176,4 +220,9 @@ spec:
         port:
           number: 8090
       weight: 50
+EOF
 
+# if it is delete action, remove the namespace the last
+if [[ "${ACTION}" == "delete" && "${NAMESPACE}" != "default" ]]; then
+   kubectl delete namespace ${NAMESPACE}
+fi
