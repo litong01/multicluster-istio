@@ -167,20 +167,16 @@ metadata:
   name: pathecho-label
 spec:
   host: pathecho-label
-  subsets:
-  - name: pathecho-label
-    trafficPolicy:
+  trafficPolicy:
+    portLevelSettings:
+    - port:
+        number: 8080
       loadBalancer:
-        simple: ROUND_ROBIN
-      portLevelSettings:
-      - port:
-          number: 8080
-        loadBalancer:
-          simple: LEAST_CONN
-      - port:
-          number: 8090
-        loadBalancer:
-          simple: LEAST_CONN
+        simple: LEAST_CONN 
+    - port:
+        number: 8090
+      loadBalancer:
+        simple: LEAST_CONN
 
 ---
 apiVersion: networking.istio.io/v1beta1
