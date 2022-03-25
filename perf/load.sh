@@ -2,12 +2,13 @@
 
 function printHelp() {
   echo "Usage: "
-  echo "    $0 --namespace cluster1"
+  echo "    $0 --namespace test01"
   echo ""
   echo "Where:"
   echo "    -n|--namespace  - namespace of the load"
   echo "    -d|--delete     - delete the workload"
   echo "    -e|--endpoint   - endpoint of the access"
+  echo "    -t|--timetolive - time to be removed after"
   echo "    -h|--help       - print the usage of this script"
 }
 
@@ -15,6 +16,7 @@ function printHelp() {
 NAMESPACE=""
 ACTION="apply"
 ENDPOINT=""
+TIMETOLIVE=0
 
 # Handling parameters
 while [[ $# -gt 0 ]]; do
@@ -25,9 +27,11 @@ while [[ $# -gt 0 ]]; do
     -n|--namespace)
       NAMESPACE="$2";shift;shift;;
     -e|--endpoint)
-      ENDPOINT="$2";shift:shift;;
+      ENDPOINT="$2";shift;shift;;
     -d|--delete)
       ACTION="delete";shift;;
+    -t|--timetolive)
+      TIMETOLIVE="$2";shift;shift;;
     *) # unknown option
       echo "parameter $1 is not supported"; exit 1;;
   esac
@@ -239,6 +243,85 @@ spec:
         port:
           number: 8090
       weight: 50
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: pathecho-vs-no-host
+spec:
+  hosts:
+  - "pathecho.non${NAMESPACE}"
+  gateways:
+  - pathecho-gw
+  http:
+  - match:
+    - uri:
+        prefix: /v1
+    route:
+    - destination:
+        host: pathecho
+        port:
+          number: 8080
+  - match:
+    - uri:
+        prefix: /v2
+    route:
+    - destination:
+        host: pathecho
+        port:
+          number: 8090
+  - route:
+    - destination:
+        host: pathecho-label
+        port:
+          number: 8080
+      weight: 50
+    - destination:
+        host: pathecho-label
+        port:
+          number: 8090
+      weight: 50
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: pathecho-vs-no-destination
+spec:
+  hosts:
+  - "pathecho.non${NAMESPACE}"
+  gateways:
+  - pathecho-gw
+  http:
+  - match:
+    - uri:
+        prefix: /v1
+    route:
+    - destination:
+        host: pathecho
+        port:
+          number: 8080
+  - match:
+    - uri:
+        prefix: /v2
+    route:
+    - destination:
+        host: pathecho
+        port:
+          number: 8090
+  - route:
+    - destination:
+        host: pathecho-non-exist
+        port:
+          number: 8080
+      weight: 50
+    - destination:
+        host: pathecho-non-exist
+        port:
+          number: 8090
+      weight: 50
+
 EOF
 
 if [[ "${ACTION}" == "apply" ]]; then
@@ -318,4 +401,12 @@ EOF
 # if it is delete action, remove the namespace the last
 if [[ "${ACTION}" == "delete" && "${NAMESPACE}" != "default" ]]; then
    kubectl delete namespace ${NAMESPACE}
+fi
+
+# this is to remove the whole deployment after specified timetolive parameter
+# adding this is to allow the workload to cleanup itself
+if [[ "${ACTION}" == "apply" && "${TIMETOLIVE}" > 0 ]]; then
+   SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+   starttime=$(date -d "$(date +'%H:%M:%S') $TIMETOLIVE minutes" +'%H:%M')
+   echo "${SRCDIR}/load.sh -e ${ENDPOINT} -n ${NAMESPACE} -d" | at $starttime
 fi
