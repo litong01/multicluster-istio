@@ -23,7 +23,7 @@ Here are the results of the test:
 With enableAnalysis=false
 ![flag is off](./flagoff.png)
 
-with enableAnalysis=true
+With enableAnalysis=true
 ![flag is on](./flagon.png)
 
 
