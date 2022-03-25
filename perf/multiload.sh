@@ -8,7 +8,7 @@ function printHelp() {
   echo "    -a|--action     - generate load or remove load"
   echo "    -e|--endpoint   - endpoint of the access"
   echo "    -n|--noofload   - number of namespaces to generate"
-  echo "    -r|--runtime    - the time to run a load"
+  echo "    -t|--runtime    - the time to run a load"
   echo "    -h|--help       - print the usage of this script"
 }
 
