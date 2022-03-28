@@ -29,5 +29,5 @@ With enableAnalysis=true
 
 Conclusions:
 With flag on, the CPU consumptions do not increase, however the memory consumption
-will jump about 50% comparing to when the flag is off. Number of the go routine will
-also increase around 25% comparing to when the flag is off.
+will jump about 34% comparing to when the flag is off. Number of the go routine will
+also increase around 13% comparing to when the flag is off.
