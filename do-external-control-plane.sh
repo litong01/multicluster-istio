@@ -10,7 +10,7 @@ CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 ISTIO_NAMESPACE=external-istiod
 
-if [[ $1 != '' ]]; then
+if [[ $1 == 'Del' ]]; then
   kind delete cluster --name ${CLUSTER1_NAME} 
   kind delete cluster --name ${CLUSTER2_NAME} 
   exit 0
@@ -23,6 +23,11 @@ set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER2_NAME} -s 245
 
+# In most of case, no need to load local images, when doing debugging
+# it will need to load up the Istio local built images to the clusters
+if [[ $1 == 'Load' ]]; then
+  loadimage
+fi
 
 # Use an istio instance to expose istio control plane
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
@@ -105,6 +110,8 @@ spec:
     global:
       istioNamespace: $ISTIO_NAMESPACE
       configCluster: true
+      istiod:
+        enableAnalysis: true
     pilot:
       configMap: true
     istiodRemote:
@@ -190,6 +197,8 @@ spec:
       istioNamespace: $ISTIO_NAMESPACE
       operatorManageWebhooks: true
       meshID: mesh1
+      istiod:
+        enableAnalysis: true
 EOF
 
 # Create Istio Gateway, VirtualService and DestinationRule configuration to

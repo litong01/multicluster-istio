@@ -45,3 +45,6 @@ else
   export HUB=istio
   make $TARGETS
 fi
+
+# Remove dangling images
+docker rmi -f $(docker images -f "dangling=true" -q)
