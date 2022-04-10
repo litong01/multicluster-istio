@@ -147,15 +147,21 @@ data:
 EOF
 
 # Wait for the public IP address to become available.
+IPNAME="IPAddress"
+if [[ "${IPFAMILY}" == "ipv6" ]]; then
+  IPNAME="GlobalIPv6Address"
+fi
+
 while : ; do
-  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${CLUSTERNAME}"-control-plane)
+  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.'${IPNAME}'}}{{end}}' "${CLUSTERNAME}"-control-plane)
   if [[ -n "${IP}" ]]; then
     #Change the kubeconfig file not to use the loopback IP
-    kubectl config set clusters.kind-"${CLUSTERNAME}".server https://"${IP}":6443
+    kubectl config set clusters.kind-"${CLUSTERNAME}".server https://["${IP}"]:6443
     break
   fi
   echo 'Waiting for public IP address to be available...'
   sleep 3
 done
+
 
 echo "Kubernetes cluster ${CLUSTERNAME} was created successfully!"
