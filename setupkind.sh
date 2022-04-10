@@ -41,12 +41,14 @@ function printHelp() {
   echo "    -r|--k8s-release   - the release of the k8s to setup, latest available if not given"
   echo "    -s|--ip-octet      - the 3rd octet for public ip addresses, 255 if not given, valid range: 0-255"
   echo "    -d|--delete        - delete cluster or all kind clusters"
+  echo "    -i|--ip-family     - ip family to be supported, default is ipv4 only. Value should be ipv4, ipv6, or dual"
   echo "    -h|--help          - print the usage of this script"
 }
 
 # Setup default values
 K8SRELEASE=""
 IPSPACE=255
+IPFAMILY="ipv4"
 ACTION=""
 
 # Handling parameters
@@ -61,6 +63,8 @@ while [[ $# -gt 0 ]]; do
       K8SRELEASE="--image=kindest/node:v$2";shift;shift;;
     -s|--ip-space)
       IPSPACE="$2";shift;shift;;
+    -i|--ip-family)
+      IPFAMILY="$2";shift;shift;;
     -d|--delete)
       ACTION="DEL";shift;;
     *) # unknown option
@@ -87,11 +91,32 @@ if [[ -z "${CLUSTERNAME}" ]]; then
   CLUSTERNAME="cluster1"
 fi
 
+VALIDIPFAMILIES=("ipv4", "ipv6", "dual")
+IPFAMILY="${IPFAMILY,,}"
+# Validate if the ip family value is correct.
+
+if [[ ! " ${VALIDIPFAMILIES[*]} " =~ "${IPFAMILY}" ]]; then
+  echo "${IPFAMILY} is not valid ip family"
+  exit 1
+fi
+
 # Create k8s cluster using the giving release and name
 if [[ -z "${K8SRELEASE}" ]]; then
-  kind create cluster --name "${CLUSTERNAME}"
+  cat << EOF | kind create cluster --config -
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: "${CLUSTERNAME}"
+networking:
+  ipFamily: "${IPFAMILY}"
+EOF
 else
-  kind create cluster "${K8SRELEASE}" --name "${CLUSTERNAME}"
+  cat << EOF | kind create cluster "${K8SRELEASE}" --config -
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: "${CLUSTERNAME}"
+networking:
+  ipFamily: "${IPFAMILY}"
+EOF
 fi
 # Setup cluster context
 kubectl cluster-info --context "kind-${CLUSTERNAME}"
