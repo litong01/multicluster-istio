@@ -39,8 +39,8 @@ function printHelp() {
   echo "Where:"
   echo "    -n|--cluster-name  - name of the k8s cluster to be created"
   echo "    -r|--k8s-release   - the release of the k8s to setup, latest available if not given"
-  echo "    -s|--ip-octet      - the 3rd octet for public ip addresses, 255 if not given, valid range: 0-255"
-  echo "    -d|--delete        - delete cluster or all kind clusters"
+  echo "    -s|--ip-octet      - the 2rd to the last octet for public ip addresses, 255 if not given, valid range: 0-255"
+  echo "    -d|--delete        - delete a specified cluster or all kind clusters"
   echo "    -i|--ip-family     - ip family to be supported, default is ipv4 only. Value should be ipv4, ipv6, or dual"
   echo "    -h|--help          - print the usage of this script"
 }
@@ -128,7 +128,32 @@ kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12/manifes
 # The following scripts are to make sure that the kube configuration for the cluster
 # is not using loopback ip as part of the api server endpoint. Without doing this,
 # multiple clusters wont be able to interact with each other
-PREFIX=$(docker network inspect -f '{{range .IPAM.Config }}{{ .Gateway }}{{end}}' kind | cut -d '.' -f1,2)
+ADDRNAME="IPAddress"
+IPV4PREFIX=""
+IPV6PREFIX=""
+
+# Get both ipv4 and ipv6 gateway for the cluster
+GATEWAYS=$(docker network inspect -f '{{range .IPAM.Config }}{{ .Gateway }} {{end}}' kind | cut -f1,2)
+for gateway in ${GATEWAYS[@]}; do
+  if [[ "$gateway" == *"."* ]]; then
+    IPV4PREFIX=$(echo $gateway|cut -d'.' -f1,2)
+  else
+    IPV6PREFIX=$(echo $gateway|cut -d':' -f1,2,3,4)
+  fi
+done
+
+if [[ "${IPFAMILY}" == "ipv4" ]]; then
+  ADDRNAME="IPAddress"
+  IPV4RANGE="- ${IPV4PREFIX}.$IPSPACE.200-${IPV4PREFIX}.$IPSPACE.240"
+  IPV6RANGE=""
+elif [[ "${IPFAMILY}" == "ipv6" ]]; then
+  IPV4RANGE=""
+  IPV6RANGE="- ${IPV6PREFIX}::$IPSPACE:200-${IPV6PREFIX}::$IPSPACE:240"
+  ADDRNAME="GlobalIPv6Address"
+else
+  IPV4RANGE="- ${IPV4PREFIX}.$IPSPACE.200-${IPV4PREFIX}.$IPSPACE.240"
+  IPV6RANGE="- ${IPV6PREFIX}::$IPSPACE:200-${IPV6PREFIX}::$IPSPACE:240"
+fi
 
 # Now configure the loadbalancer public IP range
 cat <<EOF | kubectl apply -f -
@@ -143,20 +168,20 @@ data:
     - name: default
       protocol: layer2
       addresses:
-      - $PREFIX.$IPSPACE.200-$PREFIX.$IPSPACE.240
+      ${IPV4RANGE}
+      ${IPV6RANGE}
 EOF
 
 # Wait for the public IP address to become available.
-IPNAME="IPAddress"
-if [[ "${IPFAMILY}" == "ipv6" ]]; then
-  IPNAME="GlobalIPv6Address"
-fi
 
 while : ; do
-  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.'${IPNAME}'}}{{end}}' "${CLUSTERNAME}"-control-plane)
+  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.'${ADDRNAME}'}}{{end}}' "${CLUSTERNAME}"-control-plane)
   if [[ -n "${IP}" ]]; then
     #Change the kubeconfig file not to use the loopback IP
-    kubectl config set clusters.kind-"${CLUSTERNAME}".server https://["${IP}"]:6443
+    if [[ "${IPFAMILY}" == "ipv6" ]]; then
+      IP="[${IP}]"
+    fi
+    kubectl config set clusters.kind-"${CLUSTERNAME}".server https://"${IP}":6443
     break
   fi
   echo 'Waiting for public IP address to be available...'
