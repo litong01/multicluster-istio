@@ -3,28 +3,19 @@
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #
-# This script sets up a k8s cluster using kind and metallb as k8s load balancer
-# The following software are required on your machine to run the script:
-#
-#   1. kubectl
-#   2. kind
-#   3. docker
-#
-# Example:
-#     ./setupkind.sh --cluster-name cluster1 --k8s-release 1.22.1 --ip-octet 255
-# 
-# The above command will create a release 1.22.1 k8s cluster named cluster1 and
-# also use metallb to setup public IP address in range xxx.xxx.255.230 - 255.240
-# Parameter --ip-octet is optional when create just one cluster, the default value
-# is 255 if not provided. When create multiple clusters, this will need to be
-# provided so that multiple clusters can use metallb allocated public IP addresses
-# to communicate with each other.
 
 set -e
 
+# This script can only produce desired results on Linux systems.
+envos=$(uname 2>/dev/null || true)
+if [[ "${envos}" != "Linux" ]]; then
+  echo "Your environment is not supported by this script."
+  exit 1
+fi
+
 # Check prerequisites
-REQUISITES=("kubectl" "kind" "docker")
-for item in "${REQUISITES[@]}"; do
+requisites=("kubectl" "kind" "docker")
+for item in "${requisites[@]}"; do
   if [[ -z $(which "${item}") ]]; then
     echo "${item} cannot be found on your system, please install ${item}"
     exit 1
@@ -64,7 +55,7 @@ while [[ $# -gt 0 ]]; do
     -s|--ip-space)
       IPSPACE="$2";shift;shift;;
     -i|--ip-family)
-      IPFAMILY="$2";shift;shift;;
+      IPFAMILY="${2,,}";shift;shift;;
     -d|--delete)
       ACTION="DEL";shift;;
     *) # unknown option
@@ -76,13 +67,13 @@ if [[ "$ACTION" == "DEL" ]]; then
   if [[ -z "${CLUSTERNAME}" ]]; then
     # delete every cluster
     allnames=$(kind get clusters)
-    allclusters=($allnames)
+    read -r -a allclusters <<< "${allnames}"
     for acluster in "${allclusters[@]}"; do
-        kind delete cluster --name ${acluster}
+        kind delete cluster --name "${acluster}"
     done
   else
     # delete specified cluster
-    kind delete cluster --name ${CLUSTERNAME}
+    kind delete cluster --name "${CLUSTERNAME}"
   fi
   exit 0
 fi
@@ -91,12 +82,18 @@ if [[ -z "${CLUSTERNAME}" ]]; then
   CLUSTERNAME="cluster1"
 fi
 
-VALIDIPFAMILIES=("ipv4", "ipv6", "dual")
-IPFAMILY="${IPFAMILY,,}"
+validIPFamilies=("ipv4" "ipv6" "dual")
 # Validate if the ip family value is correct.
+isValid="false"
+for family in "${validIPFamilies[@]}"; do
+  if [[ "$family" == "${IPFAMILY}" ]]; then
+    isValid="true"
+    break
+  fi
+done
 
-if [[ ! " ${VALIDIPFAMILIES[*]} " =~ "${IPFAMILY}" ]]; then
-  echo "${IPFAMILY} is not valid ip family"
+if [[ "${isValid}" == "false" ]]; then
+  echo "${IPFAMILY} is not valid ip family, valid values are ipv4, ipv6 or dual"
   exit 1
 fi
 
@@ -128,31 +125,32 @@ kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12/manifes
 # The following scripts are to make sure that the kube configuration for the cluster
 # is not using loopback ip as part of the api server endpoint. Without doing this,
 # multiple clusters wont be able to interact with each other
-ADDRNAME="IPAddress"
-IPV4PREFIX=""
-IPV6PREFIX=""
+addrName="IPAddress"
+ipv4Prefix=""
+ipv6Prefix=""
 
 # Get both ipv4 and ipv6 gateway for the cluster
-GATEWAYS=$(docker network inspect -f '{{range .IPAM.Config }}{{ .Gateway }} {{end}}' kind | cut -f1,2)
-for gateway in ${GATEWAYS[@]}; do
+gatewaystr=$(docker network inspect -f '{{range .IPAM.Config }}{{ .Gateway }} {{end}}' kind | cut -f1,2)
+read -r -a gateways <<< "${gatewaystr}"
+for gateway in "${gateways[@]}"; do
   if [[ "$gateway" == *"."* ]]; then
-    IPV4PREFIX=$(echo $gateway|cut -d'.' -f1,2)
+    ipv4Prefix=$(echo "${gateway}" |cut -d'.' -f1,2)
   else
-    IPV6PREFIX=$(echo $gateway|cut -d':' -f1,2,3,4)
+    ipv6Prefix=$(echo "${gateway}" |cut -d':' -f1,2,3,4)
   fi
 done
 
 if [[ "${IPFAMILY}" == "ipv4" ]]; then
-  ADDRNAME="IPAddress"
-  IPV4RANGE="- ${IPV4PREFIX}.$IPSPACE.200-${IPV4PREFIX}.$IPSPACE.240"
-  IPV6RANGE=""
+  addrName="IPAddress"
+  ipv4Range="- ${ipv4Prefix}.$IPSPACE.200-${ipv4Prefix}.$IPSPACE.240"
+  ipv6Range=""
 elif [[ "${IPFAMILY}" == "ipv6" ]]; then
-  IPV4RANGE=""
-  IPV6RANGE="- ${IPV6PREFIX}::$IPSPACE:200-${IPV6PREFIX}::$IPSPACE:240"
-  ADDRNAME="GlobalIPv6Address"
+  ipv4Range=""
+  ipv6Range="- ${ipv6Prefix}::$IPSPACE:200-${ipv6Prefix}::$IPSPACE:240"
+  addrName="GlobalIPv6Address"
 else
-  IPV4RANGE="- ${IPV4PREFIX}.$IPSPACE.200-${IPV4PREFIX}.$IPSPACE.240"
-  IPV6RANGE="- ${IPV6PREFIX}::$IPSPACE:200-${IPV6PREFIX}::$IPSPACE:240"
+  ipv4Range="- ${ipv4Prefix}.$IPSPACE.200-${ipv4Prefix}.$IPSPACE.240"
+  ipv6Range="- ${ipv6Prefix}::$IPSPACE:200-${ipv6Prefix}::$IPSPACE:240"
 fi
 
 # Now configure the loadbalancer public IP range
@@ -168,25 +166,23 @@ data:
     - name: default
       protocol: layer2
       addresses:
-      ${IPV4RANGE}
-      ${IPV6RANGE}
+      ${ipv4Range}
+      ${ipv6Range}
 EOF
 
 # Wait for the public IP address to become available.
-
 while : ; do
-  IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.'${ADDRNAME}'}}{{end}}' "${CLUSTERNAME}"-control-plane)
-  if [[ -n "${IP}" ]]; then
+  ip=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.'${addrName}'}}{{end}}' "${CLUSTERNAME}"-control-plane)
+  if [[ -n "${ip}" ]]; then
     #Change the kubeconfig file not to use the loopback IP
     if [[ "${IPFAMILY}" == "ipv6" ]]; then
-      IP="[${IP}]"
+      ip="[${ip}]"
     fi
-    kubectl config set clusters.kind-"${CLUSTERNAME}".server https://"${IP}":6443
+    kubectl config set clusters.kind-"${CLUSTERNAME}".server https://"${ip}":6443
     break
   fi
   echo 'Waiting for public IP address to be available...'
   sleep 3
 done
-
 
 echo "Kubernetes cluster ${CLUSTERNAME} was created successfully!"
