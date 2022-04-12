@@ -37,6 +37,16 @@ spec:
         resources:
           requests:
             cpu: "100m"
+        env:
+        - name: FLASK_RUN_PORT
+          value: "5000"
+        - name: FLASK_RUN_HOST
+          value: "::"
+        - name: FLASK_ENV
+          value: "development"
+        - name: FLASK_APP
+          value: "/opt/microservices/app.py"
+        command: ["flask", "run"]
         imagePullPolicy: IfNotPresent #Always
         ports:
         - containerPort: 5000
@@ -66,6 +76,16 @@ spec:
         resources:
           requests:
             cpu: "100m"
+        env:
+        - name: FLASK_RUN_PORT
+          value: "5000"
+        - name: FLASK_RUN_HOST
+          value: "::"
+        - name: FLASK_ENV
+          value: "development"
+        - name: FLASK_APP
+          value: "/opt/microservices/app.py"
+        command: ["flask", "run"]
         imagePullPolicy: IfNotPresent #Always
         ports:
         - containerPort: 5000
@@ -95,6 +115,16 @@ spec:
         resources:
           requests:
             cpu: "100m"
+        env:
+        - name: FLASK_RUN_PORT
+          value: "5000"
+        - name: FLASK_RUN_HOST
+          value: "::"
+        - name: FLASK_ENV
+          value: "development"
+        - name: FLASK_APP
+          value: "/opt/microservices/app.py"
+        command: ["flask", "run"]
         imagePullPolicy: IfNotPresent #Always
         ports:
         - containerPort: 5000

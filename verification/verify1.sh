@@ -12,6 +12,17 @@ SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # as the context
 CTX_CLUSTER=${CTX_CLUSTER:-kind-cluster2}
 
+if [[ $1 == 'Del' ]]; then
+  kubectl delete --context="${CTX_CLUSTER}" \
+    -f $SRCDIR/helloworld.yaml -l service=helloworld -n sample
+  kubectl delete --context="${CTX_CLUSTER}" \
+      -f $SRCDIR/helloworld.yaml -l version=v1 -n sample
+  kubectl delete --context="${CTX_CLUSTER}" \
+      -f $SRCDIR/helloworld.yaml -l version=v2 -n sample
+  kubectl delete --context="${CTX_CLUSTER}" -f $SRCDIR/sleep.yaml -n sample
+  exit 0
+fi
+
 # Create namespaces in each cluster
 kubectl create --context="${CTX_CLUSTER}" namespace sample --dry-run=client -o yaml \
     | kubectl apply --context="${CTX_CLUSTER}" -f -
