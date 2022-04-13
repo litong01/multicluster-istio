@@ -67,9 +67,10 @@ if [[ "$ACTION" == "DEL" ]]; then
   if [[ -z "${CLUSTERNAME}" ]]; then
     # delete every cluster
     allnames=$(kind get clusters)
+    allnames="${allnames//[$'\t\r\n']/ }"
     read -r -a allclusters <<< "${allnames}"
     for acluster in "${allclusters[@]}"; do
-        kind delete cluster --name "${acluster}"
+      kind delete cluster --name "${acluster}"
     done
   else
     # delete specified cluster
