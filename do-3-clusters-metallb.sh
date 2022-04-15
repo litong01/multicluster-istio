@@ -8,20 +8,27 @@
 
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
+CLUSTER3_NAME=cluster3
 ISTIO_NAMESPACE=external-istiod
 
 if [[ $1 != '' ]]; then
   kind delete cluster --name ${CLUSTER1_NAME} 
   kind delete cluster --name ${CLUSTER2_NAME} 
+  kind delete cluster --name ${CLUSTER3_NAME} 
   exit 0
 fi
 
 set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER1_NAME} -s 244
-
-# Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER2_NAME} -s 245
+./setupkind.sh -n ${CLUSTER3_NAME} -s 246
+
+# In most of case, no need to load local images, when doing debugging
+# it will need to load up the Istio local built images to the clusters
+if [[ "${1,,}" == 'load' ]]; then
+  loadimage
+fi
 
 # Now create the namespace in external cluster and setup istio certs
 ./makecerts.sh -c kind-${CLUSTER1_NAME} -s $ISTIO_NAMESPACE -n ${CLUSTER1_NAME}
@@ -68,7 +75,7 @@ done
 kubectl create --context kind-${CLUSTER2_NAME} namespace $ISTIO_NAMESPACE
 kubectl --context="kind-${CLUSTER2_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network2
 
-# Setup Istio remote config cluster
+# Setup Istio remote config cluster in cluster2
 istioctl install --context="kind-${CLUSTER2_NAME}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -86,6 +93,31 @@ spec:
       configMap: true
     istiodRemote:
       injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network2
+    base:
+      validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
+EOF
+
+kubectl create --context kind-${CLUSTER3_NAME} namespace $ISTIO_NAMESPACE
+kubectl --context="kind-${CLUSTER3_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network3
+
+# Setup Istio remote cluster in cluster3
+istioctl install --context="kind-${CLUSTER3_NAME}" -y -f - <<EOF
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: $ISTIO_NAMESPACE
+spec:
+  profile: external
+  meshConfig:
+    accessLogFile: /dev/stdout
+  values:
+    global:
+      istioNamespace: $ISTIO_NAMESPACE
+      configCluster: true
+    pilot:
+      configMap: true
+    istiodRemote:
+      injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER3_NAME}:ENV:net=network3
     base:
       validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
 EOF
@@ -160,4 +192,109 @@ spec:
       meshID: mesh1
       logging:
         level: "default:debug"
+EOF
+
+# Wait for the external control plane to be running
+kubectl wait --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" pod \
+  -l app=istiod -l istio=pilot --for=condition=Ready --timeout=120s
+
+# Now create a remote kubeconfig and add it to the namespace in the control plane
+istioctl x create-remote-secret \
+  --context="kind-${CLUSTER3_NAME}" \
+  --name="${CLUSTER3_NAME}" \
+  --type=remote \
+  --namespace="${ISTIO_NAMESPACE}" \
+  --create-service-account=false | \
+  kubectl apply -f - --context="kind-${CLUSTER2_NAME}"
+
+
+# function to create east-west gateway
+function createEastWestGateway() {
+
+theCluster=$1
+theNetwork=$2
+
+istioctl install -y --context "${theCluster}" --set values.global.istioNamespace=${ISTIO_NAMESPACE} -f - <<EOF
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: eastwest
+spec:
+  revision: ""
+  profile: empty
+  components:
+    ingressGateways:
+      - name: istio-eastwestgateway
+        label:
+          istio: eastwestgateway
+          app: istio-eastwestgateway
+          topology.istio.io/network: ${theNetwork}
+        enabled: true
+        k8s:
+          env:
+            # traffic through this gateway should be routed inside the network
+            - name: ISTIO_META_REQUESTED_NETWORK_VIEW
+              value: ${theNetwork}
+          service:
+            ports:
+              - name: status-port
+                port: 15021
+                targetPort: 15021
+              - name: tls
+                port: 15443
+                targetPort: 15443
+              - name: tls-istiod
+                port: 15012
+                targetPort: 15012
+              - name: tls-webhook
+                port: 15017
+                targetPort: 15017
+  values:
+    gateways:
+      istio-ingressgateway:
+        injectionTemplate: gateway
+    global:
+      network: ${theNetwork}
+EOF
+
+# Now wait for the gateway to have an external IP address or host name
+
+while : ; do
+  GATEWAY_ADDR=$(kubectl get --context ${theCluster} -n $ISTIO_NAMESPACE \
+    services/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].ip}')
+
+  if [[ ! -z $GATEWAY_ADDR ]]; then
+      echo "Public IP address ${GATEWAY_ADDR} is now available"
+      break
+  fi
+  echo 'Waiting for public IP address to be available...'
+  sleep 3
+done
+
+}
+
+# Create eastwest gateway for traffic to cross networks
+
+createEastWestGateway "kind-${CLUSTER2_NAME}" "network2"
+createEastWestGateway "kind-${CLUSTER3_NAME}" "network3"
+
+# Now expose the services in config cluster
+
+kubectl apply --context "kind-${CLUSTER2_NAME}" -n ${ISTIO_NAMESPACE} -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: cross-network-gateway
+spec:
+  selector:
+    istio: eastwestgateway
+  servers:
+    - port:
+        number: 15443
+        name: tls
+        protocol: TLS
+      tls:
+        mode: AUTO_PASSTHROUGH
+      hosts:
+        - "*.local"
 EOF

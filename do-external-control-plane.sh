@@ -94,7 +94,7 @@ done
 # The following steps are to setup the remote config cluster
 # Create the namespace in the remote cluster
 kubectl create --context kind-${CLUSTER2_NAME} namespace $ISTIO_NAMESPACE
-kubectl --context="kind-${CLUSTER2_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network1
+kubectl --context="kind-${CLUSTER2_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network2
 
 # Setup Istio remote config cluster
 istioctl install --context="kind-${CLUSTER2_NAME}" -y -f - <<EOF
@@ -115,7 +115,7 @@ spec:
     pilot:
       configMap: true
     istiodRemote:
-      injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network1
+      injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network2
     base:
       validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
 EOF
@@ -199,6 +199,8 @@ spec:
       meshID: mesh1
       istiod:
         enableAnalysis: true
+      logging:
+        level: "default:debug"
 EOF
 
 # Create Istio Gateway, VirtualService and DestinationRule configuration to
@@ -261,33 +263,3 @@ spec:
           port:
             number: 443
 EOF
-
-exit 0
-
-# The following commands are here for convenience. They are used for verification
-# purposes.
-CLUSTER1_NAME=cluster1
-CLUSTER2_NAME=cluster2
-ISTIO_NAMESPACE=external-istiod
-
-kubectl get --context=kind-${CLUSTER1_NAME} -n $ISTIO_NAMESPACE all
-
-PODID=$(kubectl get --context=kind-${CLUSTER1_NAME} -n $ISTIO_NAMESPACE pods \
-    -o jsonpath='{.items[*].metadata.name}')
-
-kubectl logs --context=kind-${CLUSTER1_NAME} -n $ISTIO_NAMESPACE $PODID
-
-kubectl create --context="kind-${CLUSTER2_NAME}" namespace sample
-kubectl label --context="kind-${CLUSTER2_NAME}" namespace sample istio-injection=enabled
-
-kubectl apply -f verification/helloworld.yaml -l service=helloworld \
-    -n sample --context="kind-${CLUSTER2_NAME}"
-
-kubectl apply -f verification/helloworld.yaml -l version=v1 \
-    -n sample --context="kind-${CLUSTER2_NAME}"
-
-kubectl apply -f verification/sleep.yaml -n sample --context="kind-${CLUSTER2_NAME}"
-
-kubectl exec --context="kind-${CLUSTER2_NAME}" -n sample -c sleep \
-    "$(kubectl get pod --context="kind-${CLUSTER2_NAME}" -n sample -l app=sleep -o jsonpath='{.items[0].metadata.name}')" \
-    -- curl -sS helloworld.sample:5000/hello
