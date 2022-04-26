@@ -6,13 +6,12 @@
 # installed in external-istiod namespace which is
 # considered as istio external control plane
 
-CLUSTER1_NAME=cluster1
-CLUSTER2_NAME=cluster2
+CLUSTER1_NAME=external
+CLUSTER2_NAME=config
 ISTIO_NAMESPACE=external-istiod
 
 if [[ $1 != '' ]]; then
-  kind delete cluster --name ${CLUSTER1_NAME} 
-  kind delete cluster --name ${CLUSTER2_NAME} 
+  ./setupkind.sh -d
   exit 0
 fi
 
@@ -22,6 +21,13 @@ set -e
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER2_NAME} -s 245
+
+# In most of case, no need to load local images, when doing debugging
+# it will need to load up the Istio local built images to the clusters
+istioctlversion=$(istioctl version 2>/dev/null|head -1)
+if [[ "${istioctlversion}" == *"-dev" ]]; then
+  loadimage
+fi
 
 # Now create the namespace in external cluster and setup istio certs
 ./makecerts.sh -c kind-${CLUSTER1_NAME} -s $ISTIO_NAMESPACE -n ${CLUSTER1_NAME}
@@ -154,10 +160,36 @@ spec:
           value: istio
   values:
     global:
-      caAddress: $EXTERNAL_ISTIOD_ADDR:15012
-      istioNamespace: $ISTIO_NAMESPACE
+      caAddress: ${EXTERNAL_ISTIOD_ADDR}:15012
+      istioNamespace: ${ISTIO_NAMESPACE}
       operatorManageWebhooks: true
       meshID: mesh1
       logging:
         level: "default:debug"
 EOF
+
+# Wait few seconds
+# deploy ingress gateway
+(cat <<EOF | istioctl manifest generate --set values.global.istioNamespace=${ISTIO_NAMESPACE} --context="kind-${CLUSTER2_NAME}" -f -
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  profile: empty
+  components:
+    ingressGateways:
+    - namespace: ${ISTIO_NAMESPACE}
+      name: istio-ingressgateway
+      enabled: true
+      k8s:
+        overlays:
+        - kind: Deployment
+          name: istio-ingressgateway
+          patches:
+          - path: spec.template.spec.containers[0].imagePullPolicy
+            value: IfNotPresent
+  values:
+    gateways:
+      istio-ingressgateway:
+        injectionTemplate: gateway
+EOF
+) | kubectl apply --context kind-${CLUSTER2_NAME} -n ${ISTIO_NAMESPACE} -f -

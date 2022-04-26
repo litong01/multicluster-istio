@@ -6,13 +6,12 @@
 # to expose the istio instance in external-istiod namespace
 # which is considered as istio external control plane
 
-CLUSTER1_NAME=cluster1
-CLUSTER2_NAME=cluster2
+CLUSTER1_NAME=external
+CLUSTER2_NAME=config
 ISTIO_NAMESPACE=external-istiod
 
-if [[ $1 == 'Del' ]]; then
-  kind delete cluster --name ${CLUSTER1_NAME} 
-  kind delete cluster --name ${CLUSTER2_NAME} 
+if [[ "${1}" != '' ]]; then
+  ./setupkind.sh -d
   exit 0
 fi
 
@@ -25,7 +24,8 @@ set -e
 
 # In most of case, no need to load local images, when doing debugging
 # it will need to load up the Istio local built images to the clusters
-if [[ $1 == 'Load' ]]; then
+istioctlversion=$(istioctl version 2>/dev/null|head -1)
+if [[ "${istioctlversion}" == *"-dev" ]]; then
   loadimage
 fi
 
@@ -193,8 +193,8 @@ spec:
           value: istio
   values:
     global:
-      caAddress: $EXTERNAL_ISTIOD_ADDR:15012
-      istioNamespace: $ISTIO_NAMESPACE
+      caAddress: ${EXTERNAL_ISTIOD_ADDR}:15012
+      istioNamespace: ${ISTIO_NAMESPACE}
       operatorManageWebhooks: true
       meshID: mesh1
       istiod:
@@ -210,7 +210,7 @@ apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
   name: external-istiod-gw
-  namespace: $ISTIO_NAMESPACE
+  namespace: ${ISTIO_NAMESPACE}
 spec:
   selector:
     istio: ingressgateway
@@ -237,7 +237,7 @@ apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
    name: external-istiod-vs
-   namespace: $ISTIO_NAMESPACE
+   namespace: ${ISTIO_NAMESPACE}
 spec:
     hosts:
     - "*"
@@ -263,3 +263,29 @@ spec:
           port:
             number: 443
 EOF
+
+# Create an ingress gateway
+(cat <<EOF | istioctl manifest generate --set values.global.istioNamespace=${ISTIO_NAMESPACE} --context="kind-${CLUSTER2_NAME}" -f -
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  profile: empty
+  components:
+    ingressGateways:
+    - namespace: ${ISTIO_NAMESPACE}
+      name: istio-ingressgateway
+      enabled: true
+      k8s:
+        overlays:
+        - kind: Deployment
+          name: istio-ingressgateway
+          patches:
+          - path: spec.template.spec.containers[0].imagePullPolicy
+            value: IfNotPresent
+  values:
+    gateways:
+      istio-ingressgateway:
+        injectionTemplate: gateway
+EOF
+) | kubectl apply --context kind-${CLUSTER2_NAME} -n ${ISTIO_NAMESPACE} -f -
+

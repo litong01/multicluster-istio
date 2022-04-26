@@ -11,13 +11,6 @@ CLUSTER2_NAME=cluster2
 CLUSTER3_NAME=cluster3
 ISTIO_NAMESPACE=external-istiod
 
-if [[ $1 != '' ]]; then
-  kind delete cluster --name ${CLUSTER1_NAME} 
-  kind delete cluster --name ${CLUSTER2_NAME} 
-  kind delete cluster --name ${CLUSTER3_NAME} 
-  exit 0
-fi
-
 set -e
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER1_NAME} -s 244
@@ -26,7 +19,8 @@ set -e
 
 # In most of case, no need to load local images, when doing debugging
 # it will need to load up the Istio local built images to the clusters
-if [[ "${1,,}" == 'load' ]]; then
+istioctlversion=$(istioctl version 2>/dev/null|head -1)
+if [[ "${istioctlversion}" == *"-dev" ]]; then
   loadimage
 fi
 
@@ -198,23 +192,30 @@ EOF
 kubectl wait --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" pod \
   -l app=istiod -l istio=pilot --for=condition=Ready --timeout=120s
 
+
 # Now create a remote kubeconfig and add it to the namespace in the control plane
+echo "Create the secret..."
 istioctl x create-remote-secret \
   --context="kind-${CLUSTER3_NAME}" \
   --name="${CLUSTER3_NAME}" \
   --type=remote \
   --namespace="${ISTIO_NAMESPACE}" \
   --create-service-account=false | \
-  kubectl apply -f - --context="kind-${CLUSTER2_NAME}"
+  kubectl apply -f - --context="kind-${CLUSTER1_NAME}"
 
+echo "Waiting..."
+sleep 3
 
+exit 0
 # function to create east-west gateway
 function createEastWestGateway() {
 
 theCluster=$1
 theNetwork=$2
 
-istioctl install -y --context "${theCluster}" --set values.global.istioNamespace=${ISTIO_NAMESPACE} -f - <<EOF
+echo "Creating East-West gateway in cluster ${theCluster}"
+
+(cat <<EOF | istioctl manifest generate --context "${theCluster}" --set values.global.istioNamespace=${ISTIO_NAMESPACE} -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
@@ -231,6 +232,12 @@ spec:
           topology.istio.io/network: ${theNetwork}
         enabled: true
         k8s:
+          overlays:
+          - kind: Deployment
+            name: istio-eastwestgateway
+            patches:
+            - path: spec.template.spec.containers[0].imagePullPolicy
+              value: IfNotPresent
           env:
             # traffic through this gateway should be routed inside the network
             - name: ISTIO_META_REQUESTED_NETWORK_VIEW
@@ -256,7 +263,7 @@ spec:
     global:
       network: ${theNetwork}
 EOF
-
+) | kubectl apply --context ${theCluster} -n ${ISTIO_NAMESPACE} -f -
 # Now wait for the gateway to have an external IP address or host name
 
 while : ; do
@@ -279,7 +286,6 @@ createEastWestGateway "kind-${CLUSTER2_NAME}" "network2"
 createEastWestGateway "kind-${CLUSTER3_NAME}" "network3"
 
 # Now expose the services in config cluster
-
 kubectl apply --context "kind-${CLUSTER2_NAME}" -n ${ISTIO_NAMESPACE} -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
@@ -298,3 +304,12 @@ spec:
       hosts:
         - "*.local"
 EOF
+
+exit 0
+
+# using istioctl proxy-status to show istio status
+
+export ISTIOCTL_XDS_ADDRESS=172.19.244.200:15012
+export ISTIOCTL_ISTIONAMESPACE=${ISTIO_NAMESPACE}
+export ISTIOCTL_PREFER_EXPERIMENTAL=true
+istioctl proxy-status --context kind-cluster2
