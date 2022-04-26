@@ -6,9 +6,9 @@
 # installed in external-istiod namespace which is
 # considered as istio external control plane
 
-CLUSTER1_NAME=cluster1
-CLUSTER2_NAME=cluster2
-CLUSTER3_NAME=cluster3
+CLUSTER1_NAME=external
+CLUSTER2_NAME=config
+CLUSTER3_NAME=remote
 ISTIO_NAMESPACE=external-istiod
 
 set -e
@@ -206,7 +206,6 @@ istioctl x create-remote-secret \
 echo "Waiting..."
 sleep 3
 
-exit 0
 # function to create east-west gateway
 function createEastWestGateway() {
 
@@ -281,7 +280,6 @@ done
 }
 
 # Create eastwest gateway for traffic to cross networks
-
 createEastWestGateway "kind-${CLUSTER2_NAME}" "network2"
 createEastWestGateway "kind-${CLUSTER3_NAME}" "network3"
 
