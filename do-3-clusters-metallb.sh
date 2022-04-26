@@ -12,6 +12,12 @@ CLUSTER3_NAME=remote
 ISTIO_NAMESPACE=external-istiod
 
 set -e
+
+if [[ $1 != '' ]]; then
+  ./setupkind.sh -d
+  exit 0
+fi
+
 # Use the script to setup a k8s cluster with Metallb installed and setup
 ./setupkind.sh -n ${CLUSTER1_NAME} -s 244
 ./setupkind.sh -n ${CLUSTER2_NAME} -s 245
@@ -279,12 +285,11 @@ done
 
 }
 
-# Create eastwest gateway for traffic to cross networks
-createEastWestGateway "kind-${CLUSTER2_NAME}" "network2"
-createEastWestGateway "kind-${CLUSTER3_NAME}" "network3"
-
+function exposeServices() {
+theCluster=$1
+theNamespace=$2
 # Now expose the services in config cluster
-kubectl apply --context "kind-${CLUSTER2_NAME}" -n ${ISTIO_NAMESPACE} -f - <<EOF
+kubectl apply --context "${theCluster}" -n ${theNamespace} -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
@@ -302,12 +307,50 @@ spec:
       hosts:
         - "*.local"
 EOF
+}
+
+function createIngressGateway() {
+theCluster=$1
+theNamespace=$2
+(cat <<EOF | istioctl manifest generate --set values.global.istioNamespace="${theNamespace}" --context="${theCluster}" -f -
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  profile: empty
+  components:
+    ingressGateways:
+    - namespace: ${theNamespace}
+      name: istio-ingressgateway
+      enabled: true
+      k8s:
+        overlays:
+        - kind: Deployment
+          name: istio-ingressgateway
+          patches:
+          - path: spec.template.spec.containers[0].imagePullPolicy
+            value: IfNotPresent
+  values:
+    gateways:
+      istio-ingressgateway:
+        injectionTemplate: gateway
+EOF
+) | kubectl apply --context ${theCluster} -n ${theNamespace} -f -
+
+}
+
+# Create eastwest gateway for traffic to cross networks
+createEastWestGateway "kind-${CLUSTER2_NAME}" "network2"
+createEastWestGateway "kind-${CLUSTER3_NAME}" "network3"
+exposeServices "kind-${CLUSTER2_NAME}" "${ISTIO_NAMESPACE}"
+exposeServices "kind-${CLUSTER3_NAME}" "${ISTIO_NAMESPACE}"
+createIngressGateway "kind-${CLUSTER2_NAME}" "${ISTIO_NAMESPACE}"
+createIngressGateway "kind-${CLUSTER3_NAME}" "${ISTIO_NAMESPACE}"
 
 exit 0
 
 # using istioctl proxy-status to show istio status
 
 export ISTIOCTL_XDS_ADDRESS=172.19.244.200:15012
-export ISTIOCTL_ISTIONAMESPACE=${ISTIO_NAMESPACE}
+export ISTIOCTL_ISTIONAMESPACE=external-istiod
 export ISTIOCTL_PREFER_EXPERIMENTAL=true
-istioctl proxy-status --context kind-cluster2
+istioctl proxy-status --context kind-config
