@@ -28,18 +28,22 @@ function printHelp() {
   echo "    $0 --cluster-name cluster1 --k8s-release 1.22.1 --ip-octet 255"
   echo ""
   echo "Where:"
-  echo "    -n|--cluster-name  - name of the k8s cluster to be created"
-  echo "    -r|--k8s-release   - the release of the k8s to setup, latest available if not given"
-  echo "    -s|--ip-octet      - the 2rd to the last octet for public ip addresses, 255 if not given, valid range: 0-255"
-  echo "    -d|--delete        - delete a specified cluster or all kind clusters"
-  echo "    -i|--ip-family     - ip family to be supported, default is ipv4 only. Value should be ipv4, ipv6, or dual"
-  echo "    -h|--help          - print the usage of this script"
+  echo "    -n|--cluster-name   - name of the k8s cluster to be created"
+  echo "    -r|--k8s-release    - the release of the k8s to setup, latest available if not given"
+  echo "    -s|--ip-octet       - the 2rd to the last octet for public ip addresses, 255 if not given, valid range: 0-255"
+  echo "    -d|--delete         - delete a specified cluster or all kind clusters"
+  echo "    -i|--ip-family      - ip family to be supported, default is ipv4 only. Value should be ipv4, ipv6, or dual"
+  echo "    -p|--pod-subnet     - pod subnet, ex. 10.244.0.0/16"
+  echo "    -t|--service-subnet - service subnet, ex. 10.96.0.0/16"
+  echo "    -h|--help           - print the usage of this script"
 }
 
 # Setup default values
 K8SRELEASE=""
 IPSPACE=255
 IPFAMILY="ipv4"
+PODSUBNET=""
+SERVICESUBNET=""
 ACTION=""
 
 # Handling parameters
@@ -56,6 +60,10 @@ while [[ $# -gt 0 ]]; do
       IPSPACE="$2";shift;shift;;
     -i|--ip-family)
       IPFAMILY="${2,,}";shift;shift;;
+    -p|--pod-subnet)
+      PODSUBNET="podSubnet: ${2,,}";shift;shift;;
+    -t|--service-subnet)
+      SERVICESUBNET="serviceSubnet: ${2,,}";shift;shift;;
     -d|--delete)
       ACTION="DEL";shift;;
     *) # unknown option
@@ -105,7 +113,9 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: "${CLUSTERNAME}"
 networking:
-  ipFamily: "${IPFAMILY}"
+  ipFamily: ${IPFAMILY}
+  ${PODSUBNET}
+  ${SERVICESUBNET}
 EOF
 else
   cat << EOF | kind create cluster "${K8SRELEASE}" --config -
@@ -113,7 +123,9 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: "${CLUSTERNAME}"
 networking:
-  ipFamily: "${IPFAMILY}"
+  ipFamily: ${IPFAMILY}
+  ${PODSUBNET}
+  ${SERVICESUBNET}
 EOF
 fi
 # Setup cluster context
