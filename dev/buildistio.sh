@@ -43,6 +43,7 @@ else
   export VERSION=$VERSION
   export TAG=$VERSION
   export HUB=istio
+  export TARGET_OS=$(uname)
   make $TARGETS
 fi
 
