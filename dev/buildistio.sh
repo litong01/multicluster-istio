@@ -48,4 +48,7 @@ else
 fi
 
 # Remove dangling images
-docker rmi -f $(docker images -f "dangling=true" -q)
+images=$(docker images -f "dangling=true" -q)
+if [[ ! -z "${images}" ]]; then 
+  docker rmi -f $(docker images -f "dangling=true" -q)
+fi
