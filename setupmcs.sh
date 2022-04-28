@@ -94,3 +94,9 @@ for i in "${!clusterNames[@]}"; do
   ss="$(($ss-1))"
 done
 
+# We will load the dev images to the clusters if the istioctl is a dev version
+istioctlversion=$(istioctl version 2>/dev/null|head -1)
+if [[ "${istioctlversion}" == *"-dev" ]]; then
+  loadimage
+fi
+
