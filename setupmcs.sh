@@ -55,6 +55,68 @@ if [[ "$ACTION" == "DEL" ]]; then
   exit 0
 fi
 
+cInfo=""
+cInfoLength=0
+function getTopology() {
+  allthings=$(cat ${TOPOLOGY} | docker run --rm -i imega/jq:1.6 -c \
+    '.[] | .clusterName, .network, .podSubnet,.svcSubnet,.meta.kubeconfig')
+
+  # Replace special characters with space
+  allthings="${allthings//[$'\t\r\n\"']/ }"
+  read -r -a cInfo <<< "${allthings}"
+  cInfoLength="$((${#cInfo[@]} - 1))"
+  # validate if we are getting null that means some fields were not specified
+  if [[ "${allthings}" == *null* ]]; then
+    echo "Your topology file missing critical information for a cluster."
+    echo "Each cluster must have clusterName, network, podSubnet, svcSubnet and meta.kubeconfig specified"
+    exit 1
+  fi
+}
+
+function createCluster() {
+  ss=255
+  for i in $(seq 0 5 "${cInfoLength}"); do
+    cname="${cInfo[i]}"
+    echo "Creating cluster ${cname} pod-subnet=${cInfo[i+2]} svc-subnet=${cInfo[i+3]} ..."
+    setupkind -n "${cname}" -p "${cInfo[i+2]}" -t "${cInfo[i+3]}" -s "${ss}"
+    if [[ -z "${cInfo[i+4]}" ]]; then
+      targetfile="${TARGETDIR}/${cInfo[i]}"
+    else
+      targetfile="${cInfo[i+4]}"
+    fi
+    kind export kubeconfig --name "${cname}" --kubeconfig "${targetfile}"
+    serverurl=$(kubectl config view -o jsonpath='{.clusters[?(@.name == "kind-'${cname}'")].cluster.server}')
+    kubectl --kubeconfig "${targetfile}" config set clusters.kind-"${cname}".server "${serverurl}"
+
+    ss="$(($ss-1))"
+  done
+}
+
+function addRoutes() {
+  for i in $(seq 0 5 "${cInfoLength}"); do
+    # Get clusters which share same network for a given cluster and network name
+    allthings=$(cat topology.json | docker run --rm -i imega/jq:1.6 --arg cn ${cInfo[i]} \
+      --arg nn ${cInfo[i+1]} -c \
+      '[ .[] | select( .network == $nn and .clusterName != $cn )] |.[]| .clusterName,.podSubnet,.svcSubnet')
+    allthings="${allthings//[$'\t\r\n\"']/ }"
+    read -r -a allsubs <<< "${allthings}"
+    endloopj="$((${#allsubs[@]} - 1))"
+    if [[ "${endloopj}" -gt 0 ]]; then
+      echo "Ready to add routes for cluster ${cInfo[i]}:"
+      for j in $(seq 0 3 "${endloopj}"); do
+        # Now get the IP address of the changing cluster public IP
+        ip=$(docker inspect -f '{{ .NetworkSettings.Networks.kind.IPAddress }}' "${allsubs[j]}-control-plane" 2>/dev/null)
+        if [[ ! -z "${ip}" ]]; then
+          docker exec "${cInfo[i]}-control-plane" ip route add "${allsubs[j+1]}" via "${ip}"
+          echo "   Route ${allsubs[j+1]} via ${ip} for cluster ${allsubs[j]} added"
+          docker exec "${cInfo[i]}-control-plane" ip route add "${allsubs[j+2]}" via "${ip}"
+          echo "   Route ${allsubs[j+2]} via ${ip} for cluster ${allsubs[j]} added"
+        fi
+      done
+    fi
+  done
+}
+
 if [[ ! -f "${TOPOLOGY}" ]]; then
   echo "Topology file ${TOPOLOGY} cannot be found, making sure the topology file exists"
   exit 1
@@ -65,80 +127,9 @@ if [[ ! -d "${TARGETDIR}" ]]; then
   mkdir -p "${TARGETDIR}"
 fi
 
-allthings=$(cat ${TOPOLOGY} | docker run --rm -i imega/jq:1.6 -c '.[].clusterName')
-allthings="${allthings//[$'\t\r\n\"']/ }"
-read -r -a clusterNames <<< "${allthings}"
-
-allthings=$(cat ${TOPOLOGY} | docker run --rm -i imega/jq:1.6 -c '.[].podSubnet')
-allthings="${allthings//[$'\t\r\n\"']/ }"
-read -r -a podSubnets <<< "${allthings}"
-
-allthings=$(cat ${TOPOLOGY} | docker run --rm -i imega/jq:1.6 -c '.[].svcSubnet')
-allthings="${allthings//[$'\t\r\n\"']/ }"
-read -r -a svcSubnets <<< "${allthings}"
-
-allthings=$(cat ${TOPOLOGY} | docker run --rm -i imega/jq:1.6 -c '.[].meta.kubeconfig')
-allthings="${allthings//[$'\t\r\n\"']/ }"
-read -r -a kubeconfigs <<< "${allthings}"
-
-ss=255
-for i in "${!clusterNames[@]}"; do
-  echo "Creating cluster ${clusterNames[i]} pod-subnet=${podSubnets[i]} svc-subnet=${svcSubnets[i]} "
-  setupkind -n "${clusterNames[i]}" -p "${podSubnets[i]}" -t "${svcSubnets[i]}" -s "${ss}"
-  echo "Saving the kubeconfig file at the current directory"
-  if [[ -z "${kubeconfigs[i]}" ]]; then
-    targetfile="${TARGETDIR}/${clusterNames[i]}"
-  else
-    targetfile="${kubeconfigs[i]}"
-  fi
-  kind export kubeconfig --name "${clusterNames[i]}" --kubeconfig "${targetfile}"
-  serverurl=$(kubectl config view -o jsonpath='{.clusters[?(@.name == "kind-'${clusterNames[i]}'")].cluster.server}')
-  kubectl --kubeconfig "${targetfile}" config set clusters.kind-"${clusterNames[i]}".server "${serverurl}"
-
-  ss="$(($ss-1))"
-done
-
-function addRoutes() {
-  # Work to get each cluster name, network name, podSubnet and svcSubnet
-  allthings=$(cat topology.json | docker run --rm -i imega/jq:1.6 -c \
-    '.[] | .clusterName, .network, .podSubnet,.svcSubnet')
-
-  # Replace special characters with space
-  allthings="${allthings//[$'\t\r\n\"']/ }"
-
-  # Read the content in allthings into netinfo variable
-  # This will be a list, which looks like this
-  #  config network-1 10.20.0.0/16 10.255.20.0/24
-  #  remote network-2 10.30.0.0/16 10.255.30.0/24
-  #  external network-1 10.10.0.0/16 10.255.10.0/24
-  #  external000 network-1 10.40.0.0/16 10.255.40.0/24
-  read -r -a clusterinfo <<< "${allthings}"
-
-  endloop="$((${#clusterinfo[@]} - 1))"
-  for i in $(seq 0 4 "${endloop}"); do
-    # Get clusters which share same network for a given cluster and network name
-    allthings=$(cat topology.json | docker run --rm -i imega/jq:1.6 --arg cn ${clusterinfo[i]} \
-      --arg nn ${clusterinfo[i+1]} -c \
-      '[ .[] | select( .network == $nn and .clusterName != $cn )] |.[]| .clusterName,.podSubnet,.svcSubnet')
-    allthings="${allthings//[$'\t\r\n\"']/ }"
-    read -r -a allsubs <<< "${allthings}"
-    endloopj="$((${#allsubs[@]} - 1))"
-    if [[ "${endloopj}" -gt 0 ]]; then
-      echo "Ready to add routes for cluster ${clusterinfo[i]}:"
-      for j in $(seq 0 3 "${endloopj}"); do
-        # Now get the IP address of the changing cluster public IP
-        ip=$(docker inspect -f '{{ .NetworkSettings.Networks.kind.IPAddress }}' "${allsubs[j]}-control-plane" 2>/dev/null)
-        if [[ ! -z "${ip}" ]]; then
-          docker exec "${clusterinfo[i]}-control-plane" ip route add "${allsubs[j+1]}" via "${ip}"
-          echo "   Route ${allsubs[j+1]} via ${ip} for cluster ${allsubs[j]} added"
-          docker exec "${clusterinfo[i]}-control-plane" ip route add "${allsubs[j+2]}" via "${ip}"
-          echo "   Route ${allsubs[j+2]} via ${ip} for cluster ${allsubs[j]} added"
-        fi
-      done
-    fi
-  done
-}
-
+set -e
+getTopology
+createCluster
 addRoutes
 
 # We will load the dev images to the clusters if the istioctl is a dev version
