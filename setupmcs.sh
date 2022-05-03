@@ -6,6 +6,11 @@
 # kubeconfig file location, if that is the case, then that location
 # override the target directory if that is also specified.
 
+ColorOff='\033[0m'        # Text Reset
+Black='\033[0;30m'        # Black
+Red='\033[0;31m'          # Red
+Green='\033[0;32m'        # Green
+
 # Function to print the usage message
 function printHelp() {
   echo "Usage: "
@@ -22,6 +27,7 @@ function printHelp() {
 # Setup default values
 TARGETDIR="$(pwd)"
 TOPOLOGY="$(pwd)/topology.json"
+TOPOLOGYCONTENT=""
 ACTION=""
 LOADIMAGE="false"
 
@@ -55,10 +61,15 @@ if [[ "$ACTION" == "DEL" ]]; then
   exit 0
 fi
 
+# Check if the topology coming from stdin or pipe
+if [[ -p /dev/stdin ]]; then
+  TOPOLOGYCONTENT="$(cat)"
+fi
+
 cInfo=""
 cInfoLength=0
 function getTopology() {
-  allthings=$(cat ${TOPOLOGY} | docker run --rm -i imega/jq:1.6 -c \
+  allthings=$(echo ${TOPOLOGYCONTENT} | docker run --rm -i imega/jq:1.6 -c \
     '.[] | .clusterName, .network, .podSubnet,.svcSubnet,.meta.kubeconfig')
 
   # Replace special characters with space
@@ -95,31 +106,36 @@ function createCluster() {
 function addRoutes() {
   for i in $(seq 0 5 "${cInfoLength}"); do
     # Get clusters which share same network for a given cluster and network name
-    allthings=$(cat topology.json | docker run --rm -i imega/jq:1.6 --arg cn ${cInfo[i]} \
+    allthings=$(echo ${TOPOLOGYCONTENT} | docker run --rm -i imega/jq:1.6 --arg cn ${cInfo[i]} \
       --arg nn ${cInfo[i+1]} -c \
       '[ .[] | select( .network == $nn and .clusterName != $cn )] |.[]| .clusterName,.podSubnet,.svcSubnet')
     allthings="${allthings//[$'\t\r\n\"']/ }"
     read -r -a allsubs <<< "${allthings}"
     endloopj="$((${#allsubs[@]} - 1))"
     if [[ "${endloopj}" -gt 0 ]]; then
-      echo "Ready to add routes for cluster ${cInfo[i]}:"
+      echo -e "Adding routes for cluster ${Green}${cInfo[i]}${ColorOff}:"
       for j in $(seq 0 3 "${endloopj}"); do
         # Now get the IP address of the changing cluster public IP
         ip=$(docker inspect -f '{{ .NetworkSettings.Networks.kind.IPAddress }}' "${allsubs[j]}-control-plane" 2>/dev/null)
         if [[ ! -z "${ip}" ]]; then
           docker exec "${cInfo[i]}-control-plane" ip route add "${allsubs[j+1]}" via "${ip}"
-          echo "   Route ${allsubs[j+1]} via ${ip} for cluster ${allsubs[j]} added"
+          echo -e "   Route ${Green}${allsubs[j+1]}${ColorOff} via ${Green}${ip}${ColorOff} for cluster ${allsubs[j]} added"
           docker exec "${cInfo[i]}-control-plane" ip route add "${allsubs[j+2]}" via "${ip}"
-          echo "   Route ${allsubs[j+2]} via ${ip} for cluster ${allsubs[j]} added"
+          echo -e "   Route ${Green}${allsubs[j+2]}${ColorOff} via ${Green}${ip}${ColorOff} for cluster ${allsubs[j]} added"
         fi
       done
     fi
   done
 }
 
-if [[ ! -f "${TOPOLOGY}" ]]; then
-  echo "Topology file ${TOPOLOGY} cannot be found, making sure the topology file exists"
-  exit 1
+# content did not come from stdin or pipe, try the topology file
+if [[ -z "${TOPOLOGYCONTENT}" ]]; then
+  if [[ ! -f "${TOPOLOGY}" ]]; then
+    echo "Topology file ${TOPOLOGY} cannot be found, making sure the topology file exists"
+    exit 1
+  else
+    TOPOLOGYCONTENT=$(cat ${TOPOLOGY})
+  fi
 fi
 
 if [[ ! -d "${TARGETDIR}" ]]; then
