@@ -4,10 +4,10 @@
 
 go test -p 1 -v -count=1 -tags=integ -vet=off -timeout 30m \
   ./tests/integration/pilot/... \
-  --istio.test.skipVM --istio.test.ci \
+  --istio.test.skipVM \
   --istio.test.pullpolicy=IfNotPresent \
   --istio.test.work_dir=/tmp/work \
-  --istio.test.hub=istio --istio.test.tag=1.15-dev \
+  --istio.test.hub=localhost:5000 --istio.test.tag=1.15-dev \
   --istio.test.kube.topology=/tmp/work/topology.json \
   "--istio.test.select=,-postsubmit"
 

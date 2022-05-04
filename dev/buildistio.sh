@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "${TARGETS}" ]]; then
-  TARGETS="istioctl docker.pilot docker.proxyv2"
+  TARGETS="istioctl docker.pilot docker.proxyv2 docker.app docker.ext-authz docker.app_sidecar_ubuntu_jammy docker.install-cni"
 fi
 
 if [[ ! -f "Makefile.core.mk" || ! -f "Makefile" ]]; then
