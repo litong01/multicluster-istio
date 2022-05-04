@@ -42,7 +42,6 @@ else
   fi
   export VERSION=$VERSION
   export TAG=$VERSION
-  export HUB=istio
   make $TARGETS
 fi
 

@@ -111,6 +111,33 @@ if [[ -z "${K8SRELEASE}" ]]; then
   cat << EOF | kind create cluster --config -
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+featureGates:
+  MixedProtocolLBService: true
+  EndpointSlice: true
+  GRPCContainerProbe: true
+kubeadmConfigPatches:
+  - |
+    apiVersion: kubeadm.k8s.io/v1beta2
+    kind: ClusterConfiguration
+    metadata:
+      name: config
+    etcd:
+      local:
+        # Run etcd in a tmpfs (in RAM) for performance improvements
+        dataDir: /tmp/kind-cluster-etcd
+    # We run single node, drop leader election to reduce overhead
+    controllerManagerExtraArgs:
+      leader-elect: "false"
+    schedulerExtraArgs:
+      leader-elect: "false"
+    apiServer:
+      extraArgs:
+        "service-account-issuer": "kubernetes.default.svc"
+        "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5000"]
+      endpoint = ["http://kind-registry:5000"]
 name: "${CLUSTERNAME}"
 networking:
   ipFamily: ${IPFAMILY}
@@ -121,6 +148,33 @@ else
   cat << EOF | kind create cluster "${K8SRELEASE}" --config -
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+featureGates:
+  MixedProtocolLBService: true
+  EndpointSlice: true
+  GRPCContainerProbe: true
+kubeadmConfigPatches:
+  - |
+    apiVersion: kubeadm.k8s.io/v1beta2
+    kind: ClusterConfiguration
+    metadata:
+      name: config
+    etcd:
+      local:
+        # Run etcd in a tmpfs (in RAM) for performance improvements
+        dataDir: /tmp/kind-cluster-etcd
+    # We run single node, drop leader election to reduce overhead
+    controllerManagerExtraArgs:
+      leader-elect: "false"
+    schedulerExtraArgs:
+      leader-elect: "false"
+    apiServer:
+      extraArgs:
+        "service-account-issuer": "kubernetes.default.svc"
+        "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5000"]
+      endpoint = ["http://kind-registry:5000"]
 name: "${CLUSTERNAME}"
 networking:
   ipFamily: ${IPFAMILY}

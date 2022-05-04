@@ -30,6 +30,8 @@ TOPOLOGY="$(pwd)/topology.json"
 TOPOLOGYCONTENT=""
 ACTION=""
 LOADIMAGE="false"
+KIND_REGISTRY_NAME="${KIND_REGISTRY_NAME:-kind-registry}"
+KIND_REGISTRY_PORT="${KIND_REGISTRY_PORT:-5000}"
 
 # Handling parameters
 while [[ $# -gt 0 ]]; do
@@ -58,6 +60,7 @@ if [[ "$ACTION" == "DEL" ]]; then
   for acluster in "${allclusters[@]}"; do
     kind delete cluster --name "${acluster}"
   done
+  docker volume prune -f
   exit 0
 fi
 
@@ -81,6 +84,18 @@ function getTopology() {
     echo "Your topology file missing critical information for a cluster."
     echo "Each cluster must have clusterName, network, podSubnet, svcSubnet and meta.kubeconfig specified"
     exit 1
+  fi
+}
+
+function setup_kind_registry() {
+  # create a registry container if it not running already
+  running="$(docker inspect -f '{{.State.Running}}' "${KIND_REGISTRY_NAME}" 2>/dev/null || true)"
+  if [[ "${running}" != 'true' ]]; then
+      docker run -d --restart=always -p "${KIND_REGISTRY_PORT}:5000" \
+        --name "${KIND_REGISTRY_NAME}" gcr.io/istio-testing/registry:2
+
+    # Allow kind nodes to reach the registry
+    docker network connect "kind" "${KIND_REGISTRY_NAME}" 2>/dev/null || true
   fi
 }
 
@@ -147,6 +162,7 @@ set -e
 getTopology
 createCluster
 addRoutes
+setup_kind_registry
 
 # We will load the dev images to the clusters if the istioctl is a dev version
 istioctlversion=$(istioctl version 2>/dev/null|head -1)
