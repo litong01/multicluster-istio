@@ -60,6 +60,7 @@ if [[ "$ACTION" == "DEL" ]]; then
   for acluster in "${allclusters[@]}"; do
     kind delete cluster --name "${acluster}"
   done
+  docker rm -f ${KIND_REGISTRY_NAME}
   docker volume prune -f
   exit 0
 fi
