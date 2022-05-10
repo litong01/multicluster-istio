@@ -18,17 +18,58 @@ if [[ $1 != '' ]]; then
   exit 0
 fi
 
-# Use the script to setup a k8s cluster with Metallb installed and setup
-./setupkind.sh -n ${CLUSTER1_NAME} -s 244
-./setupkind.sh -n ${CLUSTER2_NAME} -s 245
-./setupkind.sh -n ${CLUSTER3_NAME} -s 246
-
-# In most of case, no need to load local images, when doing debugging
-# it will need to load up the Istio local built images to the clusters
+LOADIMAGE=""
+HUB="istio"
 istioctlversion=$(istioctl version 2>/dev/null|head -1)
 if [[ "${istioctlversion}" == *"-dev" ]]; then
-  loadimage
+  LOADIMAGE="-l"
+  HUB="localhost:5000"
 fi
+
+# Use the script to setup a k8s cluster with Metallb installed and setup
+cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
+[
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER2_NAME}",
+    "podSubnet": "10.10.0.0/16",
+    "svcSubnet": "10.255.10.0/24",
+    "network": "network-1",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER2_NAME}"
+    }
+  },
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER3_NAME}",
+    "podSubnet": "10.20.0.0/16",
+    "svcSubnet": "10.255.20.0/24",
+    "network": "network-2",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER3_NAME}"
+    }
+  },
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER1_NAME}",
+    "podSubnet": "10.30.0.0/16",
+    "svcSubnet": "10.255.30.0/24",
+    "network": "network-1",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
+    }
+  }
+]
+EOF
 
 # Now create the namespace in external cluster and setup istio certs
 ./makecerts.sh -c kind-${CLUSTER1_NAME} -s $ISTIO_NAMESPACE -n ${CLUSTER1_NAME}
@@ -89,6 +130,7 @@ spec:
     global:
       istioNamespace: $ISTIO_NAMESPACE
       configCluster: true
+      hub: ${HUB}
     pilot:
       configMap: true
     istiodRemote:
@@ -114,6 +156,7 @@ spec:
     global:
       istioNamespace: $ISTIO_NAMESPACE
       configCluster: true
+      hub: "${HUB}"
     pilot:
       configMap: true
     istiodRemote:
@@ -187,8 +230,9 @@ spec:
   values:
     global:
       caAddress: $EXTERNAL_ISTIOD_ADDR:15012
-      istioNamespace: $ISTIO_NAMESPACE
+      istioNamespace: ${ISTIO_NAMESPACE}
       operatorManageWebhooks: true
+      hub: ${HUB}
       meshID: mesh1
       logging:
         level: "default:debug"
@@ -198,6 +242,7 @@ EOF
 kubectl wait --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" pod \
   -l app=istiod -l istio=pilot --for=condition=Ready --timeout=120s
 
+exit 1
 
 # Now create a remote kubeconfig and add it to the namespace in the control plane
 echo "Create the secret..."
@@ -267,6 +312,7 @@ spec:
         injectionTemplate: gateway
     global:
       network: ${theNetwork}
+      hub: ${HUB}
 EOF
 ) | kubectl apply --context ${theCluster} -n ${ISTIO_NAMESPACE} -f -
 # Now wait for the gateway to have an external IP address or host name
@@ -330,6 +376,8 @@ spec:
           - path: spec.template.spec.containers[0].imagePullPolicy
             value: IfNotPresent
   values:
+    global:
+      hub: ${HUB}
     gateways:
       istio-ingressgateway:
         injectionTemplate: gateway

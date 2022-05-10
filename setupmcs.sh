@@ -165,6 +165,8 @@ createCluster
 addRoutes
 setup_kind_registry
 
-# push localhost images to local image repo
-pushimage
+# push localhost images to local image repo if set to do so
+if [[ "${LOADIMAGE,,}" == "true" ]]; then
+  pushimage
+fi
 
