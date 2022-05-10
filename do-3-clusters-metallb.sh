@@ -31,10 +31,23 @@ cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
 [
   {
     "kind": "Kubernetes",
+    "clusterName": "${CLUSTER1_NAME}",
+    "podSubnet": "10.30.0.0/16",
+    "svcSubnet": "10.255.30.0/24",
+    "network": "network-1",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
+    }
+  },
+  {
+    "kind": "Kubernetes",
     "clusterName": "${CLUSTER2_NAME}",
     "podSubnet": "10.10.0.0/16",
     "svcSubnet": "10.255.10.0/24",
-    "network": "network-1",
+    "network": "network-2",
     "primaryClusterName": "${CLUSTER1_NAME}",
     "configClusterName": "${CLUSTER2_NAME}",
     "meta": {
@@ -47,25 +60,12 @@ cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
     "clusterName": "${CLUSTER3_NAME}",
     "podSubnet": "10.20.0.0/16",
     "svcSubnet": "10.255.20.0/24",
-    "network": "network-2",
+    "network": "network-3",
     "primaryClusterName": "${CLUSTER1_NAME}",
     "configClusterName": "${CLUSTER2_NAME}",
     "meta": {
       "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER3_NAME}"
-    }
-  },
-  {
-    "kind": "Kubernetes",
-    "clusterName": "${CLUSTER1_NAME}",
-    "podSubnet": "10.30.0.0/16",
-    "svcSubnet": "10.255.30.0/24",
-    "network": "network-1",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
-    "meta": {
-      "fakeVM": false,
-      "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
     }
   }
 ]
@@ -114,7 +114,6 @@ done
 # The following steps are to setup the remote config cluster
 # Create the namespace in the remote cluster
 kubectl create --context kind-${CLUSTER2_NAME} namespace $ISTIO_NAMESPACE
-kubectl --context="kind-${CLUSTER2_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network2
 
 # Setup Istio remote config cluster in cluster2
 istioctl install --context="kind-${CLUSTER2_NAME}" -y -f - <<EOF
@@ -241,8 +240,6 @@ EOF
 # Wait for the external control plane to be running
 kubectl wait --context="kind-${CLUSTER1_NAME}" -n "${ISTIO_NAMESPACE}" pod \
   -l app=istiod -l istio=pilot --for=condition=Ready --timeout=120s
-
-exit 1
 
 # Now create a remote kubeconfig and add it to the namespace in the control plane
 echo "Create the secret..."
