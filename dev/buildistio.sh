@@ -1,7 +1,8 @@
 #!/bin/bash
 # This script build istio using customized tag/version for development
 # purposes, once istio gets built, one can use the loadimage script
-# to load the images to kind cluster for tests
+# to load the images to kind cluster for tests or use pushimage script
+# to push the images to a container image registry
 
 function printHelp() {
   echo "Usage: "
@@ -9,11 +10,14 @@ function printHelp() {
   echo ""
   echo "Where:"
   echo "    -v|--version  - the version to be built as"
+  echo "    -t|--tag      - the tag to be used for container images"
   echo "    -h|--help     - print the usage of this script"
   echo "    parameters should be istioctl docker.pilot docker.proxyv2 etc"
 }
 
 TARGETS=""
+VERSION="${VERSION}"
+TAG="${TAG}"
 
 # Handling parameters
 while [[ $# -gt 0 ]]; do
@@ -23,6 +27,8 @@ while [[ $# -gt 0 ]]; do
       printHelp; exit 0;;
     -v|--version)
       VERSION="$2";shift;shift;;
+    -t|--tag)
+      TAG="$2";shift;shift;;
     *) # unknown option
       TARGETS+="$1 ";shift;;
   esac
