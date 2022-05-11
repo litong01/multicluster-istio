@@ -1,17 +1,8 @@
 #!/bin/bash
-# This script pushes a specified docker image onto the kind k8s clusters
-# If no cluster name specified, image will be pushed to all kind clusters
-# If no image is specified, istio/pilot and istio/proxyv2:1.12-dev will
-# be loaded onto the cluster. This script relies on the istio build using
-# a tag to build istio/pilot and istio/proxyv2 image. For example:
-#
-#    export TAG=1.12-dev
-#    make docker.pilot
-#    make docker.proxyv2
-# 
-# If the above process is successful, then run this script without any
-# parameter will get istio/pilot:1.12-dev image pushed onto the kind
-# cluster, then you are ready to deploy istio onto the cluster
+# This script pushes a specified docker image to the local registry
+# If no image is specified, then all the istio images will be pushed.
+# This script is to have the Istio images seeded in the local image
+# registry so that the registry can be used by kind k8s cluster
 
 function printHelp() {
   echo "Usage: "

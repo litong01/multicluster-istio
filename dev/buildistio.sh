@@ -40,8 +40,8 @@ else
     # If nothing is setup, set it to the value in the Makefile.core.mk
     VERSION=$(grep -F "export VERSION" Makefile.core.mk | awk '{ print $4}')
   fi
-  export VERSION=$VERSION
-  export TAG=$VERSION
+  export VERSION="${VERSION}"
+  export TAG="${TAG:-${VERSION}}"
   make $TARGETS
 fi
 
