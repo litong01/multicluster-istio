@@ -9,29 +9,70 @@ Green='\033[0;32m'        # Green
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 
+set -e
+
 if [[ $1 != '' ]]; then
-  kind delete cluster --name ${CLUSTER1_NAME}
-  kind delete cluster --name ${CLUSTER2_NAME} 
+  setupmcs -d
   exit 0
 fi
 
-set -e
-# Use the script to setup a k8s cluster with Metallb installed and setup
-./setupkind.sh -n ${CLUSTER1_NAME} -s 244
+LOADIMAGE=""
+HUB="istio"
+istioctlversion=$(istioctl version 2>/dev/null|head -1)
+if [[ "${istioctlversion}" == *"-dev" ]]; then
+  LOADIMAGE="-l"
+  HUB="localhost:5000"
+  if [[ -z "${TAG}" ]]; then
+    TAG=$(docker images "localhost:5000/pilot:*" --format "{{.Tag}}")
+  fi
+fi
+TAG="${TAG:-${istioctlversion}}"
+
+echo ""
+echo -e "Hub: ${Green}${HUB}${ColorOff}"
+echo -e "Tag: ${Green}${TAG}${ColorOff}"
+echo ""
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupkind.sh -n ${CLUSTER2_NAME} -s 245
+cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
+[
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER1_NAME}",
+    "podSubnet": "10.10.0.0/16",
+    "svcSubnet": "10.255.10.0/24",
+    "network": "network-1",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
+    }
+  },
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER2_NAME}",
+    "podSubnet": "10.20.0.0/16",
+    "svcSubnet": "10.255.20.0/24",
+    "network": "network-2",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER2_NAME}"
+    }
+  }
+]
+EOF
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
-kubectl --context="kind-${CLUSTER1_NAME}" label namespace istio-system topology.istio.io/network=network1
 
 #Now setup the cacerts
 ./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
-kubectl --context="kind-${CLUSTER2_NAME}" label namespace istio-system topology.istio.io/network=network2
 
 #Now setup the cacerts
 ./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
@@ -46,6 +87,8 @@ spec:
       istio-ingressgateway:
         injectionTemplate: gateway
     global:
+      hub: ${HUB}
+      tag: ${TAG}
       meshID: mesh1
       multiCluster:
         clusterName: ${CLUSTER1_NAME}
@@ -93,6 +136,8 @@ spec:
       istio-ingressgateway:
         injectionTemplate: gateway
     global:
+      hub: ${HUB}
+      tag: ${TAG}
       meshID: mesh1
       multiCluster:
         clusterName: ${CLUSTER2_NAME}
