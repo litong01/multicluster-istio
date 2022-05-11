@@ -6,28 +6,70 @@
 # to expose the istio instance in external-istiod namespace
 # which is considered as istio external control plane
 
+ColorOff='\033[0m'        # Text Reset
+Black='\033[0;30m'        # Black
+Red='\033[0;31m'          # Red
+Green='\033[0;32m'        # Green
+
+
 CLUSTER1_NAME=external
 CLUSTER2_NAME=config
 ISTIO_NAMESPACE=external-istiod
 
 if [[ "${1}" != '' ]]; then
-  ./setupkind.sh -d
+  setupmcs -d
   exit 0
 fi
 
 set -e
-# Use the script to setup a k8s cluster with Metallb installed and setup
-./setupkind.sh -n ${CLUSTER1_NAME} -s 244
 
-# Use the script to setup a k8s cluster with Metallb installed and setup
-./setupkind.sh -n ${CLUSTER2_NAME} -s 245
-
-# In most of case, no need to load local images, when doing debugging
-# it will need to load up the Istio local built images to the clusters
+LOADIMAGE=""
+HUB="istio"
 istioctlversion=$(istioctl version 2>/dev/null|head -1)
 if [[ "${istioctlversion}" == *"-dev" ]]; then
-  loadimage
+  LOADIMAGE="-l"
+  HUB="localhost:5000"
+  if [[ -z "${TAG}" ]]; then
+    TAG=$(docker images "localhost:5000/pilot:*" --format "{{.Tag}}")
+  fi
 fi
+TAG="${TAG:-${istioctlversion}}"
+
+echo ""
+echo -e "Hub: ${Green}${HUB}${ColorOff}"
+echo -e "Tag: ${Green}${TAG}${ColorOff}"
+echo ""
+
+cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
+[
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER1_NAME}",
+    "podSubnet": "10.10.0.0/16",
+    "svcSubnet": "10.255.10.0/24",
+    "network": "network-1",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
+    }
+  },
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER2_NAME}",
+    "podSubnet": "10.20.0.0/16",
+    "svcSubnet": "10.255.20.0/24",
+    "network": "network-2",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER2_NAME}"
+    }
+  }
+]
+EOF
 
 # Use an istio instance to expose istio control plane
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
@@ -74,6 +116,8 @@ spec:
           value: ""
   values:
     global:
+      hub: ${HUB}
+      tag: ${TAG}
       logging:
         level: "default:debug"
 EOF
@@ -110,6 +154,8 @@ spec:
     global:
       istioNamespace: $ISTIO_NAMESPACE
       configCluster: true
+      hub: ${HUB}
+      tag: ${TAG}
       istiod:
         enableAnalysis: true
     pilot:
@@ -196,6 +242,8 @@ spec:
       caAddress: ${EXTERNAL_ISTIOD_ADDR}:15012
       istioNamespace: ${ISTIO_NAMESPACE}
       operatorManageWebhooks: true
+      hub: ${HUB}
+      tag: ${TAG}
       meshID: mesh1
       istiod:
         enableAnalysis: true
@@ -283,6 +331,9 @@ spec:
           - path: spec.template.spec.containers[0].imagePullPolicy
             value: IfNotPresent
   values:
+    global:
+      hub: ${HUB}
+      tag: ${TAG}
     gateways:
       istio-ingressgateway:
         injectionTemplate: gateway

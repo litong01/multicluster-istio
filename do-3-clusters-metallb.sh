@@ -6,6 +6,12 @@
 # installed in external-istiod namespace which is
 # considered as istio external control plane
 
+ColorOff='\033[0m'        # Text Reset
+Black='\033[0;30m'        # Black
+Red='\033[0;31m'          # Red
+Green='\033[0;32m'        # Green
+
+
 CLUSTER1_NAME=external
 CLUSTER2_NAME=config
 CLUSTER3_NAME=remote
@@ -14,7 +20,7 @@ ISTIO_NAMESPACE=external-istiod
 set -e
 
 if [[ $1 != '' ]]; then
-  ./setupkind.sh -d
+  setupmcs -d
   exit 0
 fi
 
@@ -24,7 +30,16 @@ istioctlversion=$(istioctl version 2>/dev/null|head -1)
 if [[ "${istioctlversion}" == *"-dev" ]]; then
   LOADIMAGE="-l"
   HUB="localhost:5000"
+  if [[ -z "${TAG}" ]]; then
+    TAG=$(docker images "localhost:5000/pilot:*" --format "{{.Tag}}")
+  fi
 fi
+TAG="${TAG:-${istioctlversion}}"
+
+echo ""
+echo -e "Hub: ${Green}${HUB}${ColorOff}"
+echo -e "Tag: ${Green}${TAG}${ColorOff}"
+echo ""
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
 cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
@@ -130,6 +145,7 @@ spec:
       istioNamespace: $ISTIO_NAMESPACE
       configCluster: true
       hub: ${HUB}
+      tag: ${TAG}
     pilot:
       configMap: true
     istiodRemote:
@@ -155,7 +171,8 @@ spec:
     global:
       istioNamespace: $ISTIO_NAMESPACE
       configCluster: true
-      hub: "${HUB}"
+      hub: ${HUB}
+      tag: ${TAG}
     pilot:
       configMap: true
     istiodRemote:
@@ -232,6 +249,7 @@ spec:
       istioNamespace: ${ISTIO_NAMESPACE}
       operatorManageWebhooks: true
       hub: ${HUB}
+      tag: ${TAG}
       meshID: mesh1
       logging:
         level: "default:debug"
@@ -310,6 +328,7 @@ spec:
     global:
       network: ${theNetwork}
       hub: ${HUB}
+      tag: ${TAG}
 EOF
 ) | kubectl apply --context ${theCluster} -n ${ISTIO_NAMESPACE} -f -
 # Now wait for the gateway to have an external IP address or host name
@@ -375,6 +394,7 @@ spec:
   values:
     global:
       hub: ${HUB}
+      tag: ${TAG}
     gateways:
       istio-ingressgateway:
         injectionTemplate: gateway
