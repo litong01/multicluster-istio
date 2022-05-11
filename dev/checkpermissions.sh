@@ -60,9 +60,11 @@ function getRole() {
 
 set -e
 if [[ -z "${CONTEXT}" ]]; then
-  CONTEXT=$(kubectl config current-context)
+  CONTEXT=$(kubectl config current-context 2>/dev/null || true)
   if [[ -z "${CONTEXT}" ]]; then
-    echo -e "${Red}Cluster context cannot be found, please specify context${ColorOff}"
+    echo -e "${Red}Error:${ColorOff}"
+    echo -e "    ${Red}Cluster context not specified, please specify context${ColorOff}"
+    echo ""
     printHelp
     exit 1
   fi
