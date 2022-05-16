@@ -2,6 +2,23 @@
 # this script should be run inside of the kind node
 # it will display the network namespace for a given pod
 # or container 
+# 
+# In one namespace (host node), running ip link command, you might see something
+# like the following:
+#    29: veth76ccaba@if28
+#
+# In a docker container, running ip link command, you might see something like:
+#    28: eth0@if29
+#
+# The two examples mean that on the host node, there is an interface card named
+# veth76ccaba, its interface index is 29, and its peer interface index is 28, most
+# likely in an other namespace. On the container, same way, there is an interface
+# named eth0 and its link index is 28, and its peer interface index is 29.
+# 
+# The @if is like a key word or separator which separates the interface name and
+# its peer interface index. The command ip link should also display either
+# link-netns or link-netnsid, which should be the indication where the peer interface
+# resides.
 
 ColorOff='\033[0m'        # Text Reset
 Black='\033[0;30m'        # Black
