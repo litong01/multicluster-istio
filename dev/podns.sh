@@ -60,31 +60,33 @@ function getPodNS() {
 
   podname=$(crictl inspectp --output go-template --template \
     '{{.status.metadata.namespace}}/{{.status.metadata.name}}' ${podid})
-  echo -e "PodID: ${Green}${podid}${ColorOff}"
-  echo -e "Pod: ${Green}${podname}${ColorOff}"
+  echo -e "Pod id: ${Green}${podid}${ColorOff}"
+  echo -e "Pod full name: ${Green}${podname}${ColorOff}"
 
   podip=$(crictl inspectp --output go-template --template \
     '{{.status.network.ip}}' ${podid})
-  echo -e "Pod IP: ${Green}${podip}${ColorOff}"
+  echo -e "Pod ip: ${Green}${podip}${ColorOff}"
 
 
   # Get process id of the container
   processid=$(crictl inspectp --output go-template --template '{{.info.pid}}' ${podid})
-  echo -e "Process ID: ${Green}${processid}${ColorOff}"
+  echo -e "Process id: ${Green}${processid}${ColorOff}"
   # 1. Use nsenter command to get all the interfaces
   # 2. Get the interface name which links to the host
   # 3. Use the cut command to get the interface number
-  iid=$(nsenter -t ${processid} -n ip link|grep -A0 eth0@|cut -d ':' -f 2|cut -d 'f' -f 2)
-  echo -e "IP Link ID: ${Green}${iid}${ColorOff}"
-  #
-  vdevice=$(ip link | grep -A0 "^${iid}" | cut -d ':' -f 2)
-  if [[ -z "${vdevice}" ]]; then
-    echo -e "${Red}No link device found${ColorOff}"
+  indexid=$(nsenter -t ${processid} -n ip link|grep -A0 eth0@|cut -d ':' -f 1)
+  echo -e "Interface eth0 index: ${Green}${indexid}${ColorOff}"
+
+  peerindex=$(nsenter -t ${processid} -n ip link|grep -A0 eth0@|cut -d ':' -f 2|cut -d 'f' -f 2)
+  echo -e "Peer index: ${Green}${peerindex}${ColorOff}"
+
+  peername=$(ip link|grep -A0 "^${peerindex}:"|cut -d ':' -f 2)
+  if [[ -z "${peername}" ]]; then
+    echo -e "${Red}Peer interface might be in the downstream namespace!${ColorOff}"
   else
-    echo -e "IP Link Name: ${Green}${vdevice}${ColorOff}"
-    # Now get the pod network namespace
-    podnetns=$(ip link | grep -A1 ${vdevice}|tail -n 1|cut -d ' ' -f 10)
-    echo -e "Network Namespace: ${Green}${podnetns}${ColorOff}"
+    echo -e "Peer interface name: ${Green}${peername}${ColorOff}"
+    ns=$(ip link|grep -A1 "^${peerindex}:"|tail -n +2|rev|cut -d ' ' -f 1|rev)
+    echo -e "Network namespace: ${Green}${ns}${ColorOff}"
   fi
 }
 
