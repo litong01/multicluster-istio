@@ -19,6 +19,26 @@
 # its peer interface index. The command ip link should also display either
 # link-netns or link-netnsid, which should be the indication where the peer interface
 # resides.
+#
+# Other useful commands to help with network namespace and virtual interfaces
+#   sudo lsns -t net
+#   sudo nsenter -t <process id> -n ip link
+#   ip netns list-id
+# To have a big overall network picture, one probably can start from the host
+# with this command:
+#     ip link
+# that command should display all network interfaces and their associated
+# namespaces by looking at link-netnsid or link-netns
+# Use this command to list all the namespace ids
+#     ip netns list-id
+# Then you may use this command to list all the namespace and its process id
+#     lsns -t net
+# once the process id is retrieved, you can then use the following command to
+# see all the devices in that namespace, assume pid is set to contain process
+# id of a network namespace:
+#     sudo nsenter -t $pid -n ip link
+#     sudo nsenter -t $pid -n ip addr
+#     sudo nsenter -t $pid -n ip route
 
 ColorOff='\033[0m'        # Text Reset
 Black='\033[0;30m'        # Black
