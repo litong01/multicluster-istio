@@ -21,7 +21,7 @@
 # resides.
 #
 # Other useful commands to help with network namespace and virtual interfaces
-#   sudo lsns -t net
+#   sudo lsns -t net or sudo lsns
 #   sudo nsenter -t <process id> -n ip link
 #   ip netns list-id
 # To have a big overall network picture, one probably can start from the host
@@ -39,6 +39,11 @@
 #     sudo nsenter -t $pid -n ip link
 #     sudo nsenter -t $pid -n ip addr
 #     sudo nsenter -t $pid -n ip route
+# or if you already identified the pod network namespace, you could run the
+# following command as well to list its IP, device and routes
+#     sudo ip netns exec <network namespace> ip link
+#     sudo ip netns exec <network namespace> ip addr
+#     sudo ip netns exec <network namespace> ip route
 
 ColorOff='\033[0m'        # Text Reset
 Black='\033[0;30m'        # Black
