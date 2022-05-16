@@ -39,33 +39,46 @@ while [[ $# -gt 0 ]]; do
 done
 
 function getPodNS() {
-  cid=$1
+  podid=$1
+
+  podname=$(crictl inspectp --output go-template --template \
+    '{{.status.metadata.namespace}}/{{.status.metadata.name}}' ${podid})
+  echo -e "PodID: ${Green}${podid}${ColorOff}"
+  echo -e "Pod: ${Green}${podname}${ColorOff}"
+
+  podip=$(crictl inspectp --output go-template --template \
+    '{{.status.network.ip}}' ${podid})
+  echo -e "Pod IP: ${Green}${podip}${ColorOff}"
+
+
   # Get process id of the container
-  pid=$(crictl inspect --output go-template --template '{{.info.pid}}' ${cid})
-  
+  processid=$(crictl inspectp --output go-template --template '{{.info.pid}}' ${podid})
+  echo -e "Process ID: ${Green}${processid}${ColorOff}"
   # 1. Use nsenter command to get all the interfaces
   # 2. Get the interface name which links to the host
   # 3. Use the cut command to get the interface number
-  iid=$(nsenter -t ${pid} -n ip link|grep -A0 eth0@|cut -d ':' -f 2|cut -d 'f' -f 2)
-  echo "IP Link ID: ${iid}"
+  iid=$(nsenter -t ${processid} -n ip link|grep -A0 eth0@|cut -d ':' -f 2|cut -d 'f' -f 2)
+  echo -e "IP Link ID: ${Green}${iid}${ColorOff}"
   #
   vdevice=$(ip link | grep -A0 "^${iid}" | cut -d ':' -f 2)
-  echo "IP Link Name: ${vdevice}"
-  
-  # Now get the pod network namespace
-  podnetns=$(ip link | grep -A1 ${vdevice}|tail -n 1|cut -d ' ' -f 10)
-  echo "Network Namespace: ${podnetns}"
+  if [[ -z "${vdevice}" ]]; then
+    echo -e "${Red}No link device found${ColorOff}"
+  else
+    echo -e "IP Link Name: ${Green}${vdevice}${ColorOff}"
+    # Now get the pod network namespace
+    podnetns=$(ip link | grep -A1 ${vdevice}|tail -n 1|cut -d ' ' -f 10)
+    echo -e "Network Namespace: ${Green}${podnetns}${ColorOff}"
+  fi
 }
 
 # Get the container PID
 
 function getContainerIDs() {
   cname=$1
-  cids=$(crictl ps --name $cname -q)
-  declare -a CIDS=($cids)
-  for cid in "${CIDS[@]}"; do
-    echo -e "CID: ${Green}${cid}${ColorOff}"
-    getPodNS $cid
+  podids=$(crictl ps --name $cname|tail -n +2|rev|cut -d ' ' -f 1|rev)
+  declare -a PODIDS=($podids)
+  for podid in "${PODIDS[@]}"; do
+    getPodNS $podid
     echo ""
   done
 }
@@ -73,24 +86,19 @@ function getContainerIDs() {
 function getPodIDs() {
   pname="${1}"
   if [[ -z "${pname}" ]]; then
-    pids=$(crictl pods -q)
+    podids=$(crictl pods -q)
   else
-    pids=$(crictl pods --name ${pname} -q)
+    podids=$(crictl pods --name ${pname} -q)
   fi
-  declare -a PIDS=($pids)
-  for pid in "${PIDS[@]}"; do
-    rpname=$(crictl pods --id ${pid} -o json|jq '.items[].metadata.name')
-    echo -e "POD: ${Green}${rpname}${ColorOff} PodID: ${Green}${pid}${ColorOff}"
-    cid=$(crictl ps --pod ${pid} -q)
-    getPodNS $cid
+  declare -a PODIDS=($podids)
+  for podid in "${PODIDS[@]}"; do
+    getPodNS "${podid}"
     echo ""
   done 
 }
 
-if [[ ! -z "${POD}" ]]; then
-  getPodIDs "${POD}*"
-elif [[ ! -z "${CONTAINER}" ]]; then
-  getContainerIDs "${CONTAINER}*"
+if [[ ! -z "${CONTAINER}" ]]; then
+  getContainerIDs "${CONTAINER}"
 else
-  getPodIDs
+  getPodIDs "${POD}"
 fi
