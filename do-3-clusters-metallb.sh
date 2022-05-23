@@ -149,13 +149,13 @@ spec:
     pilot:
       configMap: true
     istiodRemote:
-      injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network2
+      injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network-2
     base:
       validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
 EOF
 
 kubectl create --context kind-${CLUSTER3_NAME} namespace $ISTIO_NAMESPACE
-kubectl --context="kind-${CLUSTER3_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network3
+kubectl --context="kind-${CLUSTER3_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network-3
 
 # Setup Istio remote cluster in cluster3
 istioctl install --context="kind-${CLUSTER3_NAME}" -y -f - <<EOF
@@ -238,6 +238,8 @@ spec:
         - name: VALIDATION_WEBHOOK_CONFIG_NAME
           value: "istio-validator-${ISTIO_NAMESPACE}"
         - name: EXTERNAL_ISTIOD
+          value: "true"
+        - name: LOCAL_CLUSTER_SECERT_WATCHER
           value: "true"
         - name: CLUSTER_ID
           value: ${CLUSTER2_NAME}
@@ -404,8 +406,8 @@ EOF
 }
 
 # Create eastwest gateway for traffic to cross networks
-createEastWestGateway "kind-${CLUSTER2_NAME}" "network2"
-createEastWestGateway "kind-${CLUSTER3_NAME}" "network3"
+createEastWestGateway "kind-${CLUSTER2_NAME}" "network-2"
+createEastWestGateway "kind-${CLUSTER3_NAME}" "network-3"
 exposeServices "kind-${CLUSTER2_NAME}" "${ISTIO_NAMESPACE}"
 exposeServices "kind-${CLUSTER3_NAME}" "${ISTIO_NAMESPACE}"
 createIngressGateway "kind-${CLUSTER2_NAME}" "${ISTIO_NAMESPACE}"
@@ -415,7 +417,7 @@ exit 0
 
 # using istioctl proxy-status to show istio status
 
-export ISTIOCTL_XDS_ADDRESS=172.19.244.200:15012
+export ISTIOCTL_XDS_ADDRESS=172.19.255.200:15012
 export ISTIOCTL_ISTIONAMESPACE=external-istiod
 export ISTIOCTL_PREFER_EXPERIMENTAL=true
 istioctl proxy-status --context kind-config

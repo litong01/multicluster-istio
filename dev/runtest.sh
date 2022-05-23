@@ -17,6 +17,7 @@ function printHelp() {
   echo "    --hub          - the hub for container images"
   echo "    --tag          - the tag to be used for container images"
   echo "    --target-dir   - target directory to test"
+  echo "    --test-name    - run specific test"
   echo "    -h|--help  - print the usage of this script"
   echo "    parameters should be istioctl docker.pilot docker.proxyv2 etc"
 }
@@ -25,6 +26,7 @@ function printHelp() {
 HUB="${HUB}"
 TAG="${TAG}"
 TARGETDIR="$(pwd)/tests/integration/pilot/..."
+TESTNAME=""
 
 declare -a restArgs=()
 
@@ -40,6 +42,8 @@ while [[ $# -gt 0 ]]; do
       TAG="$2";shift;shift;;
     --target-dir)
       TARGETDIR="$2";shift;shift;;
+    --test-name)
+      TESTNAME="-run ${2}";shift;shift;;
     *) # unknown option
       restArgs+=("${1}");shift;;
   esac
@@ -74,10 +78,10 @@ echo -e "Tag: ${Green}${TAG}${ColorOff}"
 echo ""
 
 set -o xtrace
-go test -p 1 -tags=integ -vet=off "${TARGETDIR}" -timeout 30m \
- --istio.test.ci --istio.test.pullpolicy=IfNotPresent \
- --istio.test.kube.topology=/tmp/work/topology.json \
- --istio.test.work_dir=/tmp/work \
- --istio.test.hub="${HUB}" \
- --istio.test.tag="${TAG}" \
- --istio.test.select=,-postsubmit "${restArgs[@]}"
+go test -p 1 -tags=integ -vet=off ${TESTNAME} ${TARGETDIR} -timeout 30m \
+  --istio.test.ci --istio.test.pullpolicy=IfNotPresent \
+  --istio.test.kube.topology=/tmp/work/topology.json \
+  --istio.test.work_dir=/tmp/work \
+  --istio.test.hub="${HUB}" \
+  --istio.test.tag="${TAG}" \
+  --istio.test.select=,-postsubmit "${restArgs[@]}"
