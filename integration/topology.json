@@ -8,7 +8,7 @@
     "primaryClusterName": "external",
     "configClusterName": "config",
     "meta": {
-      "fakeVM": false,
+      "fakeVM": true,
       "kubeconfig": "/tmp/work/config"
     }
   },
