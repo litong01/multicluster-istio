@@ -187,9 +187,14 @@ kubectl create sa istiod-service-account -n $ISTIO_NAMESPACE --context="kind-${C
 # Create a secret to access remote cluster apiserver and install it in external cluster
 # this is to ensure that the services in external cluster will be able to access remote cluster
 # apiserver
-istioctl x create-remote-secret  --context="kind-${CLUSTER2_NAME}" \
-  --type=config --namespace=$ISTIO_NAMESPACE --service-account=istiod --name "${CLUSTER2_NAME}" \
-  --create-service-account=false | kubectl apply -f - --context="kind-${CLUSTER1_NAME}"
+istioctl x create-remote-secret \
+  --context="kind-${CLUSTER2_NAME}" \
+  --name "${CLUSTER2_NAME}" \
+  --type=config \
+  --namespace=$ISTIO_NAMESPACE \
+  --service-account=istiod \
+  --create-service-account=false | \
+  kubectl apply -f - --context="kind-${CLUSTER1_NAME}"
 
 # Setup the control plane in external cluster
 cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -

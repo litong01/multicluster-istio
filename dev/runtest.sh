@@ -79,7 +79,7 @@ echo ""
 
 set -o xtrace
 go test -p 1 -tags=integ -vet=off ${TESTNAME} ${TARGETDIR} -timeout 30m \
-  --istio.test.ci --istio.test.pullpolicy=IfNotPresent \
+  --istio.test.pullpolicy=IfNotPresent \
   --istio.test.kube.topology=/tmp/work/topology.json \
   --istio.test.work_dir=/tmp/work \
   --istio.test.hub="${HUB}" \
