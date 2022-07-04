@@ -119,11 +119,17 @@ function getPodNS() {
 
 function getContainerIDs() {
   cname=$1
-  podids=$(crictl ps --name $cname|tail -n +2|rev|cut -d ' ' -f 1|rev)
+  cnames=$(crictl ps --name ${cname} -o yaml|grep io.kubernetes.container.name|cut -d ':' -f 2|xargs)
+  declare -a CNAMES=($cnames)
+  # podids=$(crictl ps --name $cname|tail -n +2|rev|cut -d ' ' -f 1|rev)
+  podids=$(crictl ps --name ${cname} -o yaml|grep podSandboxId|cut -d ':' -f 2|xargs)
   declare -a PODIDS=($podids)
+  index=0
   for podid in "${PODIDS[@]}"; do
+    echo -e "Container full name:  ${Green}${CNAMES[index]}${ColorOff}"
     getPodNS $podid
     echo ""
+    index=$((index+1))
   done
 }
 
