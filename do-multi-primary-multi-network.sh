@@ -34,16 +34,14 @@ echo -e "Tag: ${Green}${TAG}${ColorOff}"
 echo ""
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
+cat <<EOF | setupmcs ${LOADIMAGE}
 [
   {
     "kind": "Kubernetes",
     "clusterName": "${CLUSTER1_NAME}",
     "podSubnet": "10.10.0.0/16",
     "svcSubnet": "10.255.10.0/24",
-    "network": "network-1",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
+    "network": "network1",
     "meta": {
       "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
@@ -54,9 +52,7 @@ cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
     "clusterName": "${CLUSTER2_NAME}",
     "podSubnet": "10.20.0.0/16",
     "svcSubnet": "10.255.20.0/24",
-    "network": "network-2",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
+    "network": "network2",
     "meta": {
       "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER2_NAME}"
@@ -67,12 +63,14 @@ EOF
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
+kubectl --context kind-${CLUSTER1_NAME} label namespace istio-system topology.istio.io/network=network1
 
 #Now setup the cacerts
 ./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
+kubectl --context kind-${CLUSTER2_NAME} label namespace istio-system topology.istio.io/network=network1
 
 #Now setup the cacerts
 ./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
@@ -124,7 +122,24 @@ spec:
 EOF
 
 # Expose the services in the first cluster
-kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f expose-services.yaml
+cat << EOF | kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f -
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: cross-network-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 15443
+        name: tls
+        protocol: TLS
+      tls:
+        mode: AUTO_PASSTHROUGH
+      hosts:
+        - "*.local"
+EOF
 
 # Install istio onto the second cluster
 cat <<EOF | istioctl --context="kind-${CLUSTER2_NAME}" install -y -f -
@@ -173,7 +188,24 @@ spec:
 EOF
 
 # Expose the services in the second cluster
-kubectl --context="kind-${CLUSTER2_NAME}" apply -n istio-system -f expose-services.yaml
+cat << EOF | kubectl --context="kind-${CLUSTER2_NAME}" apply -n istio-system -f -
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: cross-network-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 15443
+        name: tls
+        protocol: TLS
+      tls:
+        mode: AUTO_PASSTHROUGH
+      hosts:
+        - "*.local"
+EOF
 
 # Install a remote secret in the second cluster that provides access to
 # the first cluster API server

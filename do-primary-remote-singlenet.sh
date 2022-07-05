@@ -36,7 +36,7 @@ echo -e "Tag: ${Green}${TAG}${ColorOff}"
 echo ""
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
+cat <<EOF | setupmcs ${LOADIMAGE}
 [
   {
     "kind": "Kubernetes",
