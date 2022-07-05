@@ -14,29 +14,70 @@ CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 
 if [[ $1 != '' ]]; then
-  kind delete cluster --name ${CLUSTER1_NAME} 
-  kind delete cluster --name ${CLUSTER2_NAME} 
+  setupmcs -d
   exit 0
 fi
 
-set -e
-# Use the script to setup a k8s cluster with Metallb installed and setup
-./setupkind.sh -n ${CLUSTER1_NAME} -s 244
+LOADIMAGE=""
+HUB="istio"
+istioctlversion=$(istioctl version 2>/dev/null|head -1)
+if [[ "${istioctlversion}" == *"-dev" ]]; then
+  LOADIMAGE="-l"
+  HUB="localhost:5000"
+  if [[ -z "${TAG}" ]]; then
+    TAG=$(docker images "localhost:5000/pilot:*" --format "{{.Tag}}")
+  fi
+fi
+TAG="${TAG:-${istioctlversion}}"
+
+echo ""
+echo -e "Hub: ${Green}${HUB}${ColorOff}"
+echo -e "Tag: ${Green}${TAG}${ColorOff}"
+echo ""
 
 # Use the script to setup a k8s cluster with Metallb installed and setup
-./setupkind.sh -n ${CLUSTER2_NAME} -s 245
+cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
+[
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER1_NAME}",
+    "podSubnet": "10.10.0.0/16",
+    "svcSubnet": "10.255.10.0/24",
+    "network": "network1",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
+    }
+  },
+  {
+    "kind": "Kubernetes",
+    "clusterName": "${CLUSTER2_NAME}",
+    "podSubnet": "10.20.0.0/16",
+    "svcSubnet": "10.255.20.0/24",
+    "network": "network1",
+    "primaryClusterName": "${CLUSTER1_NAME}",
+    "configClusterName": "${CLUSTER2_NAME}",
+    "meta": {
+      "fakeVM": false,
+      "kubeconfig": "/tmp/work/${CLUSTER2_NAME}"
+    }
+  }
+]
+EOF
 
-# Now create the namespace
+
+# Create the namespace for cluster1
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
-# kubectl --context="kind-${CLUSTER1_NAME}" label namespace istio-system topology.istio.io/network=network1
 
-#Now setup the cacerts
+# Setup the cacerts
 ./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
 
-# Now create the namespace
+# Create the namespace for cluster2
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
 
-#Now setup the cacerts
+# Setup the cacerts
 ./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
 
 # Install istio onto the first cluster
@@ -84,10 +125,61 @@ spec:
 EOF
 
 # Expose the control plan
-kubectl apply --context="kind-${CLUSTER1_NAME}" -n istio-system -f expose-istiod.yaml
-
-# Expose the services in first cluster
-# kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f expose-services.yaml
+cat << EOF | kubectl apply --context="kind-${CLUSTER1_NAME}" -n istio-system -f -
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: istiod-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        name: tls-istiod
+        number: 15012
+        protocol: tls
+      tls:
+        mode: PASSTHROUGH        
+      hosts:
+        - "*"
+    - port:
+        name: tls-istiodwebhook
+        number: 15017
+        protocol: tls
+      tls:
+        mode: PASSTHROUGH          
+      hosts:
+        - "*"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: istiod-vs
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - istiod-gateway
+  tls:
+  - match:
+    - port: 15012
+      sniHosts:
+      - "*"
+    route:
+    - destination:
+        host: istiod.istio-system.svc.cluster.local
+        port:
+          number: 15012
+  - match:
+    - port: 15017
+      sniHosts:
+      - "*"
+    route:
+    - destination:
+        host: istiod.istio-system.svc.cluster.local
+        port:
+          number: 443
+EOF
 
 # Get the ingress gateway IP address
 while : ; do
@@ -121,6 +213,3 @@ spec:
     - name: istio-ingressgateway
       enabled: false
 EOF
-
-# Expose the services in the second cluster
-# kubectl --context="kind-${CLUSTER2_NAME}" apply -n istio-system -f expose-services.yaml
