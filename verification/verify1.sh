@@ -13,6 +13,8 @@ SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CTX_CLUSTER=${CTX_CLUSTER:-kind-config}
 CTX_NS=${CTX_NS:-sample}
 
+echo -e "Current context: ${Green}${CTX_CLUSTER}${ColorOff}"
+
 if [[ "${1,,}" == 'del' ]]; then
   kubectl delete --context="${CTX_CLUSTER}" \
     -f $SRCDIR/helloworld.yaml -l service=helloworld -n ${CTX_NS}
@@ -30,7 +32,7 @@ kubectl create --context="${CTX_CLUSTER}" namespace ${CTX_NS} --dry-run=client -
 
 # Label the namespace for istio injection
 kubectl label --context="${CTX_CLUSTER}" namespace ${CTX_NS} \
-    --overwrite istio-injection=enabled
+   --overwrite istio-injection=enabled
 
 # Create hello world services in each cluster
 kubectl apply --context="${CTX_CLUSTER}" \
@@ -58,13 +60,18 @@ kubectl wait --context="${CTX_CLUSTER}" -n ${CTX_NS} pod \
 PODNAME=$(kubectl get pod --context="${CTX_CLUSTER}" -n ${CTX_NS} -l \
           app=sleep -o jsonpath='{.items[0].metadata.name}')
 
+# Show the target address
+echo ""
+kubectl exec --context="${CTX_CLUSTER}" -n ${CTX_NS} -c sleep ${PODNAME} \
+  -- nslookup helloworld.${CTX_NS}.svc.cluster.local
+
 # Send 5 requests from the Sleep pod on cluster1 to the HelloWorld service
-echo -e ${Green}Ready to hit the service from the first cluster ${ColorOff}
+echo -e ${Green}Ready to hit the service from the ${CTX_CLUSTER} ${ColorOff}
 x=1; while [ $x -le 5 ]; do
   kubectl exec --context="${CTX_CLUSTER}" -n ${CTX_NS} -c sleep ${PODNAME} \
-    -- curl -sS helloworld.${CTX_NS}:5000/hello
+    -- curl -sS helloworld.${CTX_NS}.svc.cluster.local:5000/hello
   sleep 1
   x=$(( $x + 1 ))
 done
 
-kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f $SRCDIR/helloworld-gateway.yaml
+# kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f $SRCDIR/helloworld-gateway.yaml

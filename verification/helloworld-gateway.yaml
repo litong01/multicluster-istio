@@ -1,3 +1,5 @@
+# the gateway wont be needed if a gateway already was setup when
+# istio gets installed.
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
@@ -6,12 +8,20 @@ spec:
   selector:
     istio: ingressgateway # use istio default controller
   servers:
+    - port:
+        number: 15443
+        name: tls
+        protocol: TLS
+      tls:
+        mode: AUTO_PASSTHROUGH
+      hosts:
+        - "*.local"
   - port:
-      number: 80
+      number: 8080
       name: http
       protocol: HTTP
     hosts:
-    - "*"
+    - "*.local"
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
@@ -19,7 +29,7 @@ metadata:
   name: helloworld
 spec:
   hosts:
-  - "*"
+  - "*.local"
   gateways:
   - helloworld-gateway
   http:

@@ -119,9 +119,14 @@ spec:
           - name: tls-webhook
             port: 15017
             targetPort: 15017
+          - name: http
+            port: 8080
+            targetPort: 8080
 EOF
 
 # Expose the services in the first cluster
+# Notice that the port 8080 must be open on the istio ingress gateway when install
+# istio with ingress gateway, otherwise, this gateway would not really do anything.
 cat << EOF | kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f -
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
@@ -137,6 +142,12 @@ spec:
         protocol: TLS
       tls:
         mode: AUTO_PASSTHROUGH
+      hosts:
+        - "*.local"
+    - port:
+        number: 8080
+        name: http
+        protocol: http
       hosts:
         - "*.local"
 EOF
@@ -185,10 +196,16 @@ spec:
           - name: tls-webhook
             port: 15017
             targetPort: 15017
+          - name: http
+            port: 8080
+            targetPort: 8080
 EOF
 
 # Expose the services in the second cluster
+# Notice that the port 8080 must be open on the istio ingress gateway when install
+# istio with ingress gateway, otherwise, this gateway would not really do anything.
 cat << EOF | kubectl --context="kind-${CLUSTER2_NAME}" apply -n istio-system -f -
+---
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
@@ -205,6 +222,12 @@ spec:
         mode: AUTO_PASSTHROUGH
       hosts:
         - "*.local"
+    - port:
+        number: 8080
+        name: http
+        protocol: http
+      hosts:
+        - "*.local"
 EOF
 
 # Install a remote secret in the second cluster that provides access to
@@ -219,3 +242,7 @@ istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
     --name=${CLUSTER2_NAME} | \
     kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
 
+
+# To verify the installation. one will need to create workload and
+# also setup virtual service which should be using the cross-network-gateway
+# which was set up in each cluster

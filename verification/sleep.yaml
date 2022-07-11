@@ -11,9 +11,9 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
-
 ##################################################################################################
 # Sleep service
+# the sleep service purposely not to use sidecar injection
 ##################################################################################################
 apiVersion: v1
 kind: ServiceAccount
@@ -45,6 +45,8 @@ spec:
       app: sleep
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
       labels:
         app: sleep
     spec:
