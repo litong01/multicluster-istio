@@ -44,6 +44,8 @@ spec:
           value: "::"
         - name: FLASK_ENV
           value: "development"
+        - name: SERVICE_VERSION
+          value: "v1"
         - name: FLASK_APP
           value: "/opt/microservices/app.py"
         command: ["flask", "run"]
@@ -72,7 +74,7 @@ spec:
     spec:
       containers:
       - name: helloworld
-        image: docker.io/istio/examples-helloworld-v2
+        image: docker.io/istio/examples-helloworld-v1
         resources:
           requests:
             cpu: "100m"
@@ -83,6 +85,8 @@ spec:
           value: "::"
         - name: FLASK_ENV
           value: "development"
+        - name: SERVICE_VERSION
+          value: "v2"
         - name: FLASK_APP
           value: "/opt/microservices/app.py"
         command: ["flask", "run"]

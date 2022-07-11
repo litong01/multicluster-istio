@@ -70,12 +70,12 @@ kubectl --context kind-${CLUSTER1_NAME} label namespace istio-system topology.is
 
 # Now create the namespace
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
-kubectl --context kind-${CLUSTER2_NAME} label namespace istio-system topology.istio.io/network=network1
+kubectl --context kind-${CLUSTER2_NAME} label namespace istio-system topology.istio.io/network=network2
 
 #Now setup the cacerts
 ./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
 
-# Install istio onto the first cluster
+# Install istio onto the first cluster, the port 8080 was added for http traffic
 cat <<EOF | istioctl --context="kind-${CLUSTER1_NAME}" install -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -125,8 +125,6 @@ spec:
 EOF
 
 # Expose the services in the first cluster
-# Notice that the port 8080 must be open on the istio ingress gateway when install
-# istio with ingress gateway, otherwise, this gateway would not really do anything.
 cat << EOF | kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f -
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
@@ -144,15 +142,9 @@ spec:
         mode: AUTO_PASSTHROUGH
       hosts:
         - "*.local"
-    - port:
-        number: 8080
-        name: http
-        protocol: http
-      hosts:
-        - "*.local"
 EOF
 
-# Install istio onto the second cluster
+# Install istio onto the second cluster, the port 8080 was added for http traffic
 cat <<EOF | istioctl --context="kind-${CLUSTER2_NAME}" install -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -222,12 +214,6 @@ spec:
         mode: AUTO_PASSTHROUGH
       hosts:
         - "*.local"
-    - port:
-        number: 8080
-        name: http
-        protocol: http
-      hosts:
-        - "*.local"
 EOF
 
 # Install a remote secret in the second cluster that provides access to
@@ -241,8 +227,3 @@ istioctl x create-remote-secret --context="kind-${CLUSTER1_NAME}" \
 istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
     --name=${CLUSTER2_NAME} | \
     kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
-
-
-# To verify the installation. one will need to create workload and
-# also setup virtual service which should be using the cross-network-gateway
-# which was set up in each cluster

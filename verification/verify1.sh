@@ -74,4 +74,4 @@ x=1; while [ $x -le 5 ]; do
   x=$(( $x + 1 ))
 done
 
-# kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f $SRCDIR/helloworld-gateway.yaml
+kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f $SRCDIR/helloworld-gateway.yaml
