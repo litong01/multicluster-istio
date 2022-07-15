@@ -44,10 +44,7 @@ cat <<EOF | setupmcs ${LOADIMAGE}
     "podSubnet": "10.10.0.0/16",
     "svcSubnet": "10.255.10.0/24",
     "network": "network1",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
     "meta": {
-      "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
     }
   },
@@ -57,10 +54,7 @@ cat <<EOF | setupmcs ${LOADIMAGE}
     "podSubnet": "10.20.0.0/16",
     "svcSubnet": "10.255.20.0/24",
     "network": "network1",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
     "meta": {
-      "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER2_NAME}"
     }
   }
@@ -70,26 +64,32 @@ EOF
 
 # Create the namespace for cluster1
 kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
+kubectl --context kind-${CLUSTER1_NAME} label namespace istio-system topology.istio.io/network=network1
 
 # Setup the cacerts
-./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
+# ./makecerts.sh -d
+# ./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
 
 # Create the namespace for cluster2
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
+kubectl --context kind-${CLUSTER2_NAME} label namespace istio-system topology.istio.io/network=network1
 
 # Setup the cacerts
-./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
+# ./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
 
 # Install istio onto the first cluster
 cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
+  meshConfig:
+    defaultConfig:
+      proxyMetadata:
+        ISTIO_META_DNS_CAPTURE: "true"
   values:
-    gateways:
-      istio-ingressgateway:
-        injectionTemplate: gateway
     global:
+      hub: ${HUB}
+      tag: ${TAG}
       meshID: mesh1
       multiCluster:
         clusterName: ${CLUSTER1_NAME}
@@ -116,12 +116,28 @@ spec:
           - name: tls
             port: 15443
             targetPort: 15443
+          - name: https
+            port: 443
+            targetPort: 8443
           - name: tls-istiod
             port: 15012
             targetPort: 15012
           - name: tls-webhook
             port: 15017
             targetPort: 15017
+          - name: http2
+            port: 80
+            targetPort: 8080
+    pilot:
+      enabled: true
+      k8s:
+        env:
+        - name: INJECTION_WEBHOOK_CONFIG_NAME
+          value: "istio-sidecar-injector"
+        - name: VALIDATION_WEBHOOK_CONFIG_NAME
+          value: "istio-validator-istio-system"
+        - name: EXTERNAL_ISTIOD
+          value: "true"
 EOF
 
 # Expose the control plan
@@ -192,24 +208,29 @@ while : ; do
   sleep 3
 done
 
-istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
-    --name=${CLUSTER2_NAME} | \
-    kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
-
 # Install istio onto the second cluster
 cat <<EOF | istioctl install --context="kind-${CLUSTER2_NAME}" -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
+  profile: external
   values:
     global:
-      meshID: mesh1
-      multiCluster:
-        clusterName: ${CLUSTER2_NAME}
-      network: network1
+      hub: ${HUB}
+      tag: ${TAG}
       remotePilotAddress: ${DISCOVERY_ADDRESS}
+    istiodRemote:
+      injectionPath: /inject/cluster/cluster2/net/network1
+      injectionURL: https://${DISCOVERY_ADDRESS}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network1
   components:
+    base:
+      enabled: true
     ingressGateways:
     - name: istio-ingressgateway
       enabled: false
 EOF
+
+# add the cluster2 credential to cluster1
+istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
+    --name=${CLUSTER2_NAME} --namespace istio-system | \
+    kubectl apply --context="kind-${CLUSTER1_NAME}" -f -

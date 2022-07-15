@@ -133,7 +133,8 @@ basicConstraints = critical, CA:true, pathlen:0
 keyUsage = critical, digitalSignature, nonRepudiation, keyEncipherment, keyCertSign
 subjectAltName=@san
 [ san ]
-DNS.1 = istiod.istio-system.svc
+DNS.1 = istiod.${NAMESPACE}.svc
+DNS.2 = istio-ingressgateway.${NAMESPACE}.svc
 [ req_dn ]
 O = Istio
 CN = Intermediate CA

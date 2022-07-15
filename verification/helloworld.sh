@@ -10,7 +10,7 @@ SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 CTX_CLUSTER=${CTX_CLUSTER:-kind-config}
 CTX_NS=${CTX_NS:-sample}
-VERSION=${1:v1}
+VERSION=${1:-v1}
 
 # if the parameter is del, then we delete these helloworld services and deployments
 if [[ "${1,,}" == 'del' ]]; then
