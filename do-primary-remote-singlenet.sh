@@ -73,6 +73,7 @@ kubectl --context kind-${CLUSTER1_NAME} label namespace istio-system topology.is
 # Create the namespace for cluster2
 kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
 kubectl --context kind-${CLUSTER2_NAME} label namespace istio-system topology.istio.io/network=network1
+kubectl --context kind-${CLUSTER2_NAME} annotate namespace istio-system topology.istio.io/controlPlaneClusters=${CLUSTER1_NAME}
 
 # Setup the cacerts
 # ./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
@@ -155,7 +156,7 @@ spec:
         number: 15012
         protocol: tls
       tls:
-        mode: PASSTHROUGH        
+        mode: PASSTHROUGH
       hosts:
         - "*"
     - port:
@@ -163,7 +164,7 @@ spec:
         number: 15017
         protocol: tls
       tls:
-        mode: PASSTHROUGH          
+        mode: PASSTHROUGH
       hosts:
         - "*"
 ---

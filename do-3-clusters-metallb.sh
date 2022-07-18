@@ -50,8 +50,6 @@ cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
     "podSubnet": "10.30.0.0/16",
     "svcSubnet": "10.255.30.0/24",
     "network": "network-1",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
     "meta": {
       "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER1_NAME}"
@@ -63,8 +61,6 @@ cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
     "podSubnet": "10.10.0.0/16",
     "svcSubnet": "10.255.10.0/24",
     "network": "network-2",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
     "meta": {
       "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER2_NAME}"
@@ -76,8 +72,6 @@ cat <<EOF | ./setupmcs.sh ${LOADIMAGE}
     "podSubnet": "10.20.0.0/16",
     "svcSubnet": "10.255.20.0/24",
     "network": "network-3",
-    "primaryClusterName": "${CLUSTER1_NAME}",
-    "configClusterName": "${CLUSTER2_NAME}",
     "meta": {
       "fakeVM": false,
       "kubeconfig": "/tmp/work/${CLUSTER3_NAME}"
@@ -155,7 +149,10 @@ spec:
 EOF
 
 kubectl create --context kind-${CLUSTER3_NAME} namespace $ISTIO_NAMESPACE
-kubectl --context="kind-${CLUSTER3_NAME}" label namespace $ISTIO_NAMESPACE topology.istio.io/network=network-3
+kubectl --context="kind-${CLUSTER3_NAME}" label namespace \
+  $ISTIO_NAMESPACE topology.istio.io/network=network-3
+kubectl --context="kind-${CLUSTER3_NAME}" annotate namespace \
+  $ISTIO_NAMESPACE topology.istio.io/controlPlaneClusters=${CLUSTER2_NAME}
 
 # Setup Istio remote cluster in cluster3
 istioctl install --context="kind-${CLUSTER3_NAME}" -y -f - <<EOF
@@ -176,7 +173,7 @@ spec:
     pilot:
       configMap: true
     istiodRemote:
-      injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER3_NAME}:ENV:net=network3
+      injectionURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/inject/:ENV:cluster=${CLUSTER3_NAME}:ENV:net=network-3
     base:
       validationURL: https://${EXTERNAL_ISTIOD_ADDR}:15017/validate
 EOF
@@ -244,7 +241,7 @@ spec:
           value: "istio-validator-${ISTIO_NAMESPACE}"
         - name: EXTERNAL_ISTIOD
           value: "true"
-        - name: LOCAL_CLUSTER_SECERT_WATCHER
+        - name: LOCAL_CLUSTER_SECRET_WATCHER
           value: "true"
         - name: CLUSTER_ID
           value: ${CLUSTER2_NAME}
