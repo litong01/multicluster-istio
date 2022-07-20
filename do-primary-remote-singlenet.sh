@@ -12,6 +12,7 @@ Green='\033[0;32m'        # Green
 
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
+NAMESPACE=istio-system
 
 if [[ $1 != '' ]]; then
   setupmcs -d
@@ -63,30 +64,26 @@ EOF
 
 
 # Create the namespace for cluster1
-kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
-kubectl --context kind-${CLUSTER1_NAME} label namespace istio-system topology.istio.io/network=network1
+kubectl create --context kind-${CLUSTER1_NAME} namespace ${NAMESPACE}
+kubectl --context kind-${CLUSTER1_NAME} label namespace ${NAMESPACE} topology.istio.io/network=network1
 
 # Setup the cacerts
-# ./makecerts.sh -d
-# ./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
+./makecerts.sh -d
+./makecerts.sh -c kind-${CLUSTER1_NAME} -s ${NAMESPACE} -n ${CLUSTER1_NAME}
 
 # Create the namespace for cluster2
-kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
-kubectl --context kind-${CLUSTER2_NAME} label namespace istio-system topology.istio.io/network=network1
-kubectl --context kind-${CLUSTER2_NAME} annotate namespace istio-system topology.istio.io/controlPlaneClusters=${CLUSTER1_NAME}
+kubectl create --context kind-${CLUSTER2_NAME} namespace ${NAMESPACE}
+kubectl --context kind-${CLUSTER2_NAME} label namespace ${NAMESPACE} topology.istio.io/network=network1
+kubectl --context kind-${CLUSTER2_NAME} annotate namespace ${NAMESPACE} topology.istio.io/controlPlaneClusters=*
 
 # Setup the cacerts
-# ./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
+./makecerts.sh -c kind-${CLUSTER2_NAME} -s ${NAMESPACE} -n ${CLUSTER2_NAME}
 
 # Install istio onto the first cluster
 cat <<EOF | istioctl install --context="kind-${CLUSTER1_NAME}" -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
-  meshConfig:
-    defaultConfig:
-      proxyMetadata:
-        ISTIO_META_DNS_CAPTURE: "true"
   values:
     global:
       hub: ${HUB}
@@ -136,13 +133,13 @@ spec:
         - name: INJECTION_WEBHOOK_CONFIG_NAME
           value: "istio-sidecar-injector"
         - name: VALIDATION_WEBHOOK_CONFIG_NAME
-          value: "istio-validator-istio-system"
+          value: "istiod-default-validator"
         - name: EXTERNAL_ISTIOD
           value: "true"
 EOF
 
 # Expose the control plan
-cat << EOF | kubectl apply --context="kind-${CLUSTER1_NAME}" -n istio-system -f -
+cat << EOF | kubectl apply --context="kind-${CLUSTER1_NAME}" -n ${NAMESPACE} -f -
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
@@ -184,7 +181,7 @@ spec:
       - "*"
     route:
     - destination:
-        host: istiod.istio-system.svc.cluster.local
+        host: istiod.${NAMESPACE}.svc.cluster.local
         port:
           number: 15012
   - match:
@@ -193,7 +190,7 @@ spec:
       - "*"
     route:
     - destination:
-        host: istiod.istio-system.svc.cluster.local
+        host: istiod.${NAMESPACE}.svc.cluster.local
         port:
           number: 443
 EOF
@@ -201,7 +198,7 @@ EOF
 # Get the ingress gateway IP address
 while : ; do
   DISCOVERY_ADDRESS=$(kubectl --context="kind-${CLUSTER1_NAME}" get svc istio-ingressgateway \
-       -n istio-system -o=jsonpath='{.status.loadBalancer.ingress[0].ip }')
+       -n ${NAMESPACE} -o=jsonpath='{.status.loadBalancer.ingress[0].ip }')
   if [[ ! -z ${DISCOVERY_ADDRESS} ]]; then
     break
   fi
@@ -221,17 +218,62 @@ spec:
       tag: ${TAG}
       remotePilotAddress: ${DISCOVERY_ADDRESS}
     istiodRemote:
-      injectionPath: /inject/cluster/cluster2/net/network1
-      injectionURL: https://${DISCOVERY_ADDRESS}:15017/inject/:ENV:cluster=${CLUSTER2_NAME}:ENV:net=network1
-  components:
-    base:
-      enabled: true
-    ingressGateways:
-    - name: istio-ingressgateway
-      enabled: false
+      injectionPath: /inject/cluster/${CLUSTER2_NAME}/net/network1
 EOF
+
+function fixupIstiodServiceAndEndpoints(){
+action="${1,,}"
+if [[ "${action}" == "delete" ]]; then
+   kubectl delete --context="kind-${CLUSTER2_NAME}" -n ${NAMESPACE} endpoints istiod
+   kubectl delete --context="kind-${CLUSTER2_NAME}" -n ${NAMESPACE} services istiod
+else
+cat << EOF | kubectl apply --context="kind-${CLUSTER2_NAME}" -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: istiod
+  namespace: ${NAMESPACE}
+spec:
+  type: ClusterIP
+  clusterIP:
+  ports:
+  - port: 15012
+    name: tcp-istiod
+    protocol: TCP
+  - port: 443
+    targetPort: 15017
+    name: tcp-webhook
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: istiod
+  namespace: ${NAMESPACE}
+subsets:
+- addresses:
+  - ip: ${DISCOVERY_ADDRESS}
+  ports:
+  - port: 15012
+    name: tcp-istiod
+    protocol: TCP
+  - port: 15017
+    name: tcp-webhook
+    protocol: TCP
+EOF
+fi
+}
+
+# Use version compare sort to figure out if we need fixes
+verValue=$(echo -e "1.15\n${TAG,,}" | sort -V)
+verValue=$(echo $verValue)
+# The version is less than 1.15, need to fix up the services and endpoints
+if [[ "${verValue}" != "1.15 ${TAG,,}" ]]; then
+  fixupIstiodServiceAndEndpoints delete
+  fixupIstiodServiceAndEndpoints apply
+fi
 
 # add the cluster2 credential to cluster1
 istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
-    --name=${CLUSTER2_NAME} --namespace istio-system | \
+    --name=${CLUSTER2_NAME} --namespace ${NAMESPACE} | \
     kubectl apply --context="kind-${CLUSTER1_NAME}" -f -

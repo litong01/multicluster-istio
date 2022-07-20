@@ -100,9 +100,18 @@ distinguished_name = req_dn
 subjectKeyIdentifier = hash
 basicConstraints = critical, CA:true
 keyUsage = critical, digitalSignature, nonRepudiation, keyEncipherment, keyCertSign
+subjectAltName=@san
+[ san ]
+DNS.1 = istiod.${NAMESPACE}.svc
+DNS.2 = istio-ingressgateway.${NAMESPACE}.svc
+DNS.3 = istiod-remote.${NAMESPACE}.svc
+DNS.4 = istio-pilot.${NAMESPACE}.svc
+IP.1 = 127.0.0.1
+IP.2 = ::1
 [ req_dn ]
 O = Istio
 CN = Root CA
+L = ${CLUSTERNAME}
 EOT
 
   # Create the csr file
@@ -135,6 +144,8 @@ subjectAltName=@san
 [ san ]
 DNS.1 = istiod.${NAMESPACE}.svc
 DNS.2 = istio-ingressgateway.${NAMESPACE}.svc
+IP.1 = 127.0.0.1
+IP.2 = ::1
 [ req_dn ]
 O = Istio
 CN = Intermediate CA
@@ -183,7 +194,7 @@ function createIntermediateKeyAndCert() {
   cd "${WORKINGDIR}/${CLUSTERNAME}"
 
   # Create the  ca key named root-key.pem
-  openssl genrsa -out ca-key.pem 4096
+  openssl genrsa -out ca-key.pem 2048
   # Create the root certificate
   createIntermediateCert
 }
