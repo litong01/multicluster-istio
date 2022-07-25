@@ -33,5 +33,13 @@ spec:
     route:
     - destination:
         host: helloworld
+        subset: v2
         port:
           number: 5000
+      weight: 50
+    - destination:
+        host: helloworld.sample.svc.cluster.local.global
+        subset: v1
+        port:
+          number: 8080
+      weight: 50

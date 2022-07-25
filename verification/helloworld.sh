@@ -31,8 +31,7 @@ kubectl label --context="${CTX_CLUSTER}" namespace ${CTX_NS} \
    --overwrite istio-injection=enabled
 
 echo -e "Current context: ${Green}${CTX_CLUSTER}${ColorOff}"
-echo "Deploy hello world service..."
-
+echo "Deploy hello world ${VERSION} service and deployment..."
 cat << EOF | kubectl apply --context "${CTX_CLUSTER}" -n "${CTX_NS}" -f -
 apiVersion: v1
 kind: Service
@@ -47,10 +46,7 @@ spec:
     name: http
   selector:
     app: helloworld
-EOF
-
-echo "Deploy hello world ${VERSION} deployment..."
-cat << EOF | kubectl apply --context "${CTX_CLUSTER}" -n "${CTX_NS}" -f -
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -91,4 +87,55 @@ spec:
         imagePullPolicy: IfNotPresent #Always
         ports:
         - containerPort: 5000
+EOF
+
+cat << EOF | kubectl apply --context "${CTX_CLUSTER}" -n "${CTX_NS}" -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sleep
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sleep
+  labels:
+    app: sleep
+    service: sleep
+spec:
+  ports:
+  - port: 80
+    name: http
+  selector:
+    app: sleep
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sleep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sleep
+  template:
+    metadata:
+      labels:
+        app: sleep
+    spec:
+      terminationGracePeriodSeconds: 0
+      serviceAccountName: sleep
+      containers:
+      - name: sleep
+        image: curlimages/curl
+        command: ["/bin/sleep", "3650d"]
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /etc/sleep/tls
+          name: secret-volume
+      volumes:
+      - name: secret-volume
+        secret:
+          secretName: sleep-secret
+          optional: true
 EOF

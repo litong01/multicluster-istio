@@ -8,6 +8,7 @@ Green='\033[0;32m'        # Green
 
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
+NAMESPACE=istio-system
 
 set -e
 
@@ -62,49 +63,53 @@ cat <<EOF | setupmcs ${LOADIMAGE}
 EOF
 
 # Now create the namespace
-kubectl create --context kind-${CLUSTER1_NAME} namespace istio-system
-kubectl --context kind-${CLUSTER1_NAME} label namespace istio-system topology.istio.io/network=network1
+kubectl create --context kind-${CLUSTER1_NAME} namespace $NAMESPACE
+kubectl --context kind-${CLUSTER1_NAME} label namespace $NAMESPACE topology.istio.io/network=network1
+
+kubectl create --context kind-${CLUSTER2_NAME} namespace $NAMESPACE
+kubectl --context kind-${CLUSTER2_NAME} label namespace $NAMESPACE topology.istio.io/network=network2
+kubectl --context kind-${CLUSTER2_NAME} annotate namespace ${NAMESPACE} topology.istio.io/controlPlaneClusters=*
 
 #Now setup the cacerts
-./makecerts.sh -c kind-${CLUSTER1_NAME} -s istio-system -n ${CLUSTER1_NAME}
-
-# Now create the namespace
-kubectl create --context kind-${CLUSTER2_NAME} namespace istio-system
-kubectl --context kind-${CLUSTER2_NAME} label namespace istio-system topology.istio.io/network=network2
-
-#Now setup the cacerts
-./makecerts.sh -c kind-${CLUSTER2_NAME} -s istio-system -n ${CLUSTER2_NAME}
+./makecerts.sh -d
+./makecerts.sh -c kind-${CLUSTER1_NAME} -s $NAMESPACE -n ${CLUSTER1_NAME}
+./makecerts.sh -c kind-${CLUSTER2_NAME} -s $NAMESPACE -n ${CLUSTER2_NAME}
 
 # Install istio onto the first cluster, the port 8080 was added for http traffic
-cat <<EOF | istioctl --context="kind-${CLUSTER1_NAME}" install -y -f -
+function installIstio() {
+CLUSTERNAME=$1
+NETWORKNAME=$2
+cat <<EOF | istioctl --context="kind-${CLUSTERNAME}" install -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
+  meshConfig:
+    accessLogFile: /dev/stdout
   values:
-    gateways:
-      istio-ingressgateway:
-        injectionTemplate: gateway
     global:
       hub: ${HUB}
       tag: ${TAG}
       meshID: mesh1
       multiCluster:
-        clusterName: ${CLUSTER1_NAME}
-      network: network1
+        clusterName: ${CLUSTERNAME}
+      network: ${NETWORKNAME}
+      istioNamespace: ${NAMESPACE}
+      logging:
+        level: "default:debug"
   components:
     ingressGateways:
     - name: istio-ingressgateway
       label:
         istio: ingressgateway
         app: istio-ingressgateway
-        topology.istio.io/network: network1
+        topology.istio.io/network: ${NETWORKNAME}
       enabled: true
       k8s:
         env:
         - name: ISTIO_META_ROUTER_MODE
           value: "sni-dnat"
         - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-          value: network1
+          value: ${NETWORKNAME}
         service:
           ports:
           - name: status-port
@@ -119,13 +124,13 @@ spec:
           - name: tls-webhook
             port: 15017
             targetPort: 15017
-          - name: http
-            port: 8080
-            targetPort: 8080
 EOF
+}
 
+function createCrossNetworkGateway() {
+CLUSTERNAME=$1
 # Expose the services in the first cluster
-cat << EOF | kubectl --context="kind-${CLUSTER1_NAME}" apply -n istio-system -f -
+cat << EOF | kubectl --context="kind-${CLUSTERNAME}" apply -n $NAMESPACE -f -
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
@@ -144,77 +149,13 @@ spec:
         - "*.local"
 EOF
 
-# Install istio onto the second cluster, the port 8080 was added for http traffic
-cat <<EOF | istioctl --context="kind-${CLUSTER2_NAME}" install -y -f -
-apiVersion: install.istio.io/v1alpha1
-kind: IstioOperator
-spec:
-  values:
-    gateways:
-      istio-ingressgateway:
-        injectionTemplate: gateway
-    global:
-      hub: ${HUB}
-      tag: ${TAG}
-      meshID: mesh1
-      multiCluster:
-        clusterName: ${CLUSTER2_NAME}
-      network: network2
-  components:
-    ingressGateways:
-    - name: istio-ingressgateway
-      label:
-        istio: ingressgateway
-        app: istio-ingressgateway
-        topology.istio.io/network: network2
-      enabled: true
-      k8s:
-        env:
-        - name: ISTIO_META_ROUTER_MODE
-          value: "sni-dnat"
-        - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-          value: network2
-        service:
-          ports:
-          - name: status-port
-            port: 15021
-            targetPort: 15021
-          - name: tls
-            port: 15443
-            targetPort: 15443
-          - name: tls-istiod
-            port: 15012
-            targetPort: 15012
-          - name: tls-webhook
-            port: 15017
-            targetPort: 15017
-          - name: http
-            port: 8080
-            targetPort: 8080
-EOF
+}
 
-# Expose the services in the second cluster
-# Notice that the port 8080 must be open on the istio ingress gateway when install
-# istio with ingress gateway, otherwise, this gateway would not really do anything.
-cat << EOF | kubectl --context="kind-${CLUSTER2_NAME}" apply -n istio-system -f -
----
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: cross-network-gateway
-spec:
-  selector:
-    istio: ingressgateway
-  servers:
-    - port:
-        number: 15443
-        name: tls
-        protocol: TLS
-      tls:
-        mode: AUTO_PASSTHROUGH
-      hosts:
-        - "*.local"
-EOF
+installIstio ${CLUSTER1_NAME} network1
+createCrossNetworkGateway ${CLUSTER1_NAME}
+
+installIstio ${CLUSTER2_NAME} network2
+createCrossNetworkGateway ${CLUSTER2_NAME}
 
 # Install a remote secret in the second cluster that provides access to
 # the first cluster API server
@@ -227,3 +168,44 @@ istioctl x create-remote-secret --context="kind-${CLUSTER1_NAME}" \
 istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
     --name=${CLUSTER2_NAME} | \
     kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
+
+
+exit 0
+
+# these steps are for verify traffic happens across the boundary of the two clusters.
+# deploy helloworld and sleep onto cluster1 as v1 helloworld
+
+ColorOff='\033[0m'        # Text Reset
+Black='\033[0;30m'        # Black
+Red='\033[0;31m'          # Red
+Green='\033[0;32m'        # Green
+
+CLUSTER1_NAME=cluster1
+CLUSTER2_NAME=cluster2
+WORKLOADNS=sample
+
+export CTX_NS=${WORKLOADNS}
+export CTX_CLUSTER=kind-${CLUSTER1_NAME}
+verification/helloworld.sh v1
+
+# deploy helloworld and sleep onto cluster2 as v2 helloworld
+export CTX_CLUSTER=kind-${CLUSTER2_NAME}
+verification/helloworld.sh v2
+
+# verify the traffic
+function verify() {
+  CLUSTERNAME=$1
+  # get sleep podname
+  PODNAME=$(kubectl get pod --context="${CLUSTERNAME}" -n ${WORKLOADNS} -l \
+    app=sleep -o jsonpath='{.items[0].metadata.name}')
+
+  echo -e ${Green}Ready to hit the helloworld service from ${PODNAME} in ${CLUSTERNAME} ${ColorOff}
+  x=1; while [ $x -le 5 ]; do
+    kubectl exec --context="${CLUSTERNAME}" -n ${CTX_NS} -c sleep ${PODNAME} \
+      -- curl -sS helloworld.${CTX_NS}.svc.cluster.local:5000/hello
+    x=$(( $x + 1 ))
+  done
+}
+
+verify kind-${CLUSTER1_NAME}
+verify kind-${CLUSTER2_NAME}
