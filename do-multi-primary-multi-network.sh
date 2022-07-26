@@ -95,7 +95,7 @@ spec:
       network: ${NETWORKNAME}
       istioNamespace: ${NAMESPACE}
       logging:
-        level: "default:debug"
+        level: "default:info"
   components:
     ingressGateways:
     - name: istio-ingressgateway

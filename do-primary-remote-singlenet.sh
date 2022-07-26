@@ -123,9 +123,6 @@ spec:
           - name: tls-webhook
             port: 15017
             targetPort: 15017
-          - name: http2
-            port: 80
-            targetPort: 8080
     pilot:
       enabled: true
       k8s:
@@ -277,3 +274,47 @@ fi
 istioctl x create-remote-secret --context="kind-${CLUSTER2_NAME}" \
     --name=${CLUSTER2_NAME} --namespace ${NAMESPACE} | \
     kubectl apply --context="kind-${CLUSTER1_NAME}" -f -
+
+exit 0
+
+# these steps are for verify traffic happens across the boundary of the two clusters.
+# deploy helloworld and sleep onto cluster1 as v1 helloworld
+
+ColorOff='\033[0m'        # Text Reset
+Black='\033[0;30m'        # Black
+Red='\033[0;31m'          # Red
+Green='\033[0;32m'        # Green
+
+CLUSTER1_NAME=cluster1
+CLUSTER2_NAME=cluster2
+WORKLOADNS=sample
+
+export CTX_NS=${WORKLOADNS}
+export CTX_CLUSTER=kind-${CLUSTER1_NAME}
+verification/helloworld.sh v1
+
+# deploy helloworld and sleep onto cluster2 as v2 helloworld
+export CTX_CLUSTER=kind-${CLUSTER2_NAME}
+verification/helloworld.sh v2
+
+# verify the traffic
+function verify() {
+  CLUSTERNAME=$1
+  # get sleep podname
+  PODNAME=$(kubectl get pod --context="${CLUSTERNAME}" -n ${WORKLOADNS} -l \
+    app=sleep -o jsonpath='{.items[0].metadata.name}')
+
+  echo -e ${Green}Ready to hit the helloworld service from ${PODNAME} in ${CLUSTERNAME} ${ColorOff}
+  x=1; while [ $x -le 5 ]; do
+    kubectl exec --context="${CLUSTERNAME}" -n ${CTX_NS} -c sleep ${PODNAME} \
+      -- curl -sS helloworld.${CTX_NS}.svc.cluster.local:5000/hello
+    x=$(( $x + 1 ))
+  done
+
+  # show proxy config endpoints
+  echo "Endpoints for sleep pod"
+  istioctl --context="${CLUSTERNAME}" proxy-config endpoints ${PODNAME}.${CTX_NS}
+}
+
+verify kind-${CLUSTER1_NAME}
+verify kind-${CLUSTER2_NAME}
