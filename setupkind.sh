@@ -163,6 +163,8 @@ EOF
 fi
 # Setup cluster context
 kubectl cluster-info --context "kind-${CLUSTERNAME}"
+# Label the node to allow nginx ingress controller to be installed
+kubectl label nodes "${CLUSTERNAME}"-control-plane ingress-ready="true"
 
 # Setup metallb using a specific version
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12/manifests/namespace.yaml
