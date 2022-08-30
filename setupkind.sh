@@ -167,8 +167,7 @@ kubectl cluster-info --context "kind-${CLUSTERNAME}"
 kubectl label nodes "${CLUSTERNAME}"-control-plane ingress-ready="true"
 
 # Setup metallb using a specific version
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12/manifests/namespace.yaml
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12/manifests/metallb.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.4/config/manifests/metallb-native.yaml
 
 # The following scripts are to make sure that the kube configuration for the cluster
 # is not using loopback ip as part of the api server endpoint. Without doing this,
@@ -201,21 +200,28 @@ else
   ipv6Range="- ${ipv6Prefix}::$IPSPACE:200-${ipv6Prefix}::$IPSPACE:240"
 fi
 
+# Wait for metallb to be ready
+while : ; do
+  res=$(kubectl wait --context "kind-${CLUSTERNAME}" -n metallb-system pod \
+  -l component=controller,app=metallb --for=condition=Ready --timeout=120s 2>/dev/null ||true)
+  if [[ "${res}" == *"condition met"* ]]; then
+    break
+  fi
+  echo 'Waiting for metallb to be ready...'
+  sleep 15
+done
+
 # Now configure the loadbalancer public IP range
 cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ConfigMap
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
 metadata:
   namespace: metallb-system
-  name: config
-data:
-  config: |
-    address-pools:
-    - name: default
-      protocol: layer2
-      addresses:
-      ${ipv4Range}
-      ${ipv6Range}
+  name: address-pool
+spec:
+  addresses:
+    ${ipv4Range}
+    ${ipv6Range}
 EOF
 
 # Wait for the public IP address to become available.
