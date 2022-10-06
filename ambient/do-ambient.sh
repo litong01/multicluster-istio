@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 ColorOff='\033[0m'        # Text Reset
 Black='\033[0;30m'        # Black
 Red='\033[0;31m'          # Red
@@ -43,4 +42,14 @@ kubectl apply -f $SRCDIR/bookinfo.yaml
 kubectl apply -f $SRCDIR/sleep.yaml
 kubectl apply -f $SRCDIR/notsleep.yaml
 
+kubectl label namespace default istio.io/dataplane-mode=ambient
+
+exit 0
+
+# enable istio ambient
+
+# Send traffic
+kubectl exec deploy/sleep -- curl -s http://istio-ingressgateway.istio-system/productpage | head -n1
+kubectl exec deploy/sleep -- curl -s http://productpage:9080/ | head -n1
+kubectl exec deploy/notsleep -- curl -s http://productpage:9080/ | head -n1
 
