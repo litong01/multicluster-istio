@@ -35,6 +35,7 @@ function printHelp() {
   echo "    -i|--ip-family      - ip family to be supported, default is ipv4 only. Value should be ipv4, ipv6, or dual"
   echo "    -p|--pod-subnet     - pod subnet, ex. 10.244.0.0/16"
   echo "    -t|--service-subnet - service subnet, ex. 10.96.0.0/16"
+  echo "    -c|--cni            - CNI plugin, KindNet or Calico, default is KindNet"
   echo "    -h|--help           - print the usage of this script"
 }
 
@@ -45,6 +46,7 @@ IPFAMILY="ipv4"
 PODSUBNET=""
 SERVICESUBNET=""
 ACTION=""
+CNI=""
 
 FEATURES=$(cat << EOF
 featureGates:
@@ -84,17 +86,19 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       printHelp; exit 0;;
     -n|--cluster-name)
-      CLUSTERNAME="$2";shift;shift;;
+      CLUSTERNAME="$2";shift 2;;
     -r|--k8s-release)
-      K8SRELEASE="--image=kindest/node:v$2";shift;shift;;
+      K8SRELEASE="--image=kindest/node:v$2";shift 2;;
     -s|--ip-space)
       IPSPACE="$2";shift;shift;;
     -i|--ip-family)
-      IPFAMILY="${2,,}";shift;shift;;
+      IPFAMILY="${2,,}";shift 2;;
     -p|--pod-subnet)
-      PODSUBNET="podSubnet: ${2,,}";shift;shift;;
+      PODSUBNET="podSubnet: ${2,,}";shift 2;;
     -t|--service-subnet)
-      SERVICESUBNET="serviceSubnet: ${2,,}";shift;shift;;
+      SERVICESUBNET="serviceSubnet: ${2,,}";shift 2;;
+    -c|--cni)
+      CNI="${2,,}";shift 2;;
     -d|--delete)
       ACTION="DEL";shift;;
     *) # unknown option
@@ -122,6 +126,16 @@ if [[ -z "${CLUSTERNAME}" ]]; then
   CLUSTERNAME="cluster1"
 fi
 
+netExtra=""
+# Verify specified CNI
+if [[ "calico" == "${CNI}" ]]; then
+  netExtra="disableDefaultCNI: true"
+else
+  # any other value currently is considered not supported value
+  # use default kind net instead
+  CNI=""
+fi
+
 validIPFamilies=("ipv4" "ipv6" "dual")
 # Validate if the ip family value is correct.
 isValid="false"
@@ -137,6 +151,23 @@ if [[ "${isValid}" == "false" ]]; then
   exit 1
 fi
 
+# utility function to wait for pods to be ready
+function waitForPods() {
+  ns=$1
+  lb=$2
+  waittime=$3
+  # Wait for the pods to be ready in the given namespace with lable
+  while : ; do
+    res=$(kubectl wait --context "kind-${CLUSTERNAME}" -n ${ns} pod \
+      -l ${lb} --for=condition=Ready --timeout=${waittime}s 2>/dev/null ||true)
+    if [[ "${res}" == *"condition met"* ]]; then
+      break
+    fi
+    echo "Waiting for pods in namespace ${ns} with label ${lb} to be ready..."
+    sleep ${waittime}
+  done
+}
+
 # Create k8s cluster using the giving release and name
 if [[ -z "${K8SRELEASE}" ]]; then
   cat << EOF | kind create cluster --config -
@@ -148,6 +179,7 @@ networking:
   ipFamily: ${IPFAMILY}
   ${PODSUBNET}
   ${SERVICESUBNET}
+  ${netExtra}
 EOF
 else
   cat << EOF | kind create cluster "${K8SRELEASE}" --config -
@@ -159,12 +191,23 @@ networking:
   ipFamily: ${IPFAMILY}
   ${PODSUBNET}
   ${SERVICESUBNET}
+  ${netExtra}
 EOF
 fi
 # Setup cluster context
 kubectl cluster-info --context "kind-${CLUSTERNAME}"
 # Label the node to allow nginx ingress controller to be installed
 kubectl label nodes "${CLUSTERNAME}"-control-plane ingress-ready="true"
+
+# if CNI is calico, set it up now
+if [[ "${CNI}" == "calico" ]]; then
+  # Now setup calico
+  kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.1/manifests/calico.yaml
+
+  # Make sure that calico controller is running
+  waitForPods kube-system k8s-app=calico-kube-controllers 10
+  waitForPods kube-system k8s-app=calico-node 10
+fi
 
 # Setup metallb using a specific version
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.4/config/manifests/metallb-native.yaml
@@ -201,15 +244,7 @@ else
 fi
 
 # Wait for metallb to be ready
-while : ; do
-  res=$(kubectl wait --context "kind-${CLUSTERNAME}" -n metallb-system pod \
-  -l component=controller,app=metallb --for=condition=Ready --timeout=120s 2>/dev/null ||true)
-  if [[ "${res}" == *"condition met"* ]]; then
-    break
-  fi
-  echo 'Waiting for metallb to be ready...'
-  sleep 15
-done
+waitForPods metallb-system app=metallb 10
 
 # Now configure the loadbalancer public IP range
 cat <<EOF | kubectl apply -f -
