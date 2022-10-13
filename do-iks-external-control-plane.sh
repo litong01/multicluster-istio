@@ -14,7 +14,7 @@ Green='\033[0;32m'        # Green
 # Get all available kubernetes clusters
 clusters=($(kubectl config get-clusters | tail +2))
 # Sort the clusters so that we always get two first clusters
-IFS=$'\n' clusters=($(sort <<<"${clusters[*]}"))
+IFS=$'\n' clusters=($(sort -r <<<"${clusters[*]}"))
 if [[ "${#clusters[@]}" < 2 ]]; then
   echo "Need at least two clusters to do external control plane, found ${#clusters[@]}"
   exit 1
@@ -33,7 +33,11 @@ ISTIO_NAMESPACE=external-istiod
 # If there is a parameter, that means this is a delete, so remove everything
 if [[ $1 != '' ]]; then
   echo "Removing istio from ${C1_NAME}"
-  istioctl --context ${C1_CTX} uninstall --purge -y || true
+  istioctl --context ${C1_CTX} uninstall --purge -y --force || true
+  # Do not delete the service, since it will take a while to allocate
+  # reuse it
+  # kubectl delete --context ${C1_CTX} -n ${ISTIO_NAMESPACE} \
+  #   --ignore-not-found=true service/istio-endpoint-service || true
   echo "Removing istio from ${C2_NAME}"
   istioctl --context ${C2_CTX} uninstall --purge -y || true
   exit 0
@@ -58,6 +62,25 @@ echo -e "Hub: ${Green}${HUB}${ColorOff}"
 echo -e "Tag: ${Green}${TAG}${ColorOff}"
 echo ""
 
+
+# utility function to wait for pods to be ready
+function waitForPods() {
+  ns=$1
+  lb=$2
+  waittime=$3
+  ctx=$4
+
+  # Wait for the pods to be ready in the given namespace with lable
+  while : ; do
+    res=$(kubectl wait --context "${ctx}" -n ${ns} pod \
+      -l ${lb} --for=condition=Ready --timeout=${waittime}s 2>/dev/null ||true)
+    if [[ "${res}" == *"condition met"* ]]; then
+      break
+    fi
+    echo -e "Waiting for pods in namespace ${Green}${ns}${ColorOff} with label ${Green}${lb}${ColorOff} in ${Green}${ctx}${ColorOff} to be ready..."
+    sleep ${waittime}
+  done
+}
 
 # Now create the namespace in external cluster and setup istio certs
 kubectl create --context="${C1_CTX}" namespace $ISTIO_NAMESPACE --dry-run=client -o yaml \
@@ -94,6 +117,17 @@ while : ; do
 
   if [[ ! -z $EXTERNAL_ISTIOD_ADDR ]]; then
       echo "Public address ${EXTERNAL_ISTIOD_ADDR} is now available"
+      # We need to make sure that DNS entry has been propergated, otherwise, config
+      # Clusters can not be configured correctly.
+      while : ; do
+        ENTRY=$(nslookup ${EXTERNAL_ISTIOD_ADDR}|tail +5)
+        if [[ ! -z $ENTRY ]]; then
+            # This means that the DNS entry has been now available. we can go on
+            break
+        fi
+        echo -e "Wait for ${Green}${EXTERNAL_ISTIOD_ADDR}${ColorOff} DNS entry to be propagated..."
+        sleep 10
+      done
       break
   fi
   echo 'Waiting for public IP address to be available...'
@@ -106,8 +140,8 @@ kubectl create --context="${C2_CTX}" namespace $ISTIO_NAMESPACE --dry-run=client
     | kubectl apply --context="${C2_CTX}" -f -
 kubectl --context="${C2_CTX}" --overwrite=true label namespace $ISTIO_NAMESPACE topology.istio.io/network=network2
 
-# Setup Istio remote config cluster
-echo "Setting up remote config cluster in ${C2_NAME}"
+# Setup Istio config cluster
+echo -e "Setting up ${Green}config cluster${ColorOff}: ${Green}${C2_NAME}${ColorOff}"
 istioctl install --context="${C2_CTX}" -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -142,7 +176,7 @@ istioctl x create-remote-secret  --context="${C2_CTX}" \
   --create-service-account=false | kubectl apply -f - --context="${C1_CTX}"
 
 # Setup the control plane in external cluster
-echo "Setting up control plane in cluster in ${C1_NAME}"
+echo -e "Setting up ${Green}control plane${ColorOff}: ${Green}${C1_NAME}${ColorOff}"
 cat <<EOF | istioctl install --context="${C1_CTX}" -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -206,9 +240,11 @@ spec:
         level: "default:debug"
 EOF
 
-# Wait few seconds
+# Wait for control plane to be ready
+waitForPods ${ISTIO_NAMESPACE} app=istiod,istio=pilot 10 ${C1_CTX}
+
 # deploy ingress gateway
-echo "Deploy ingress gateway in ${C2_NAME}"
+echo -e "Deploy ingress gateway in ${Green}${C2_NAME}${ColorOff}"
 (cat <<EOF | istioctl manifest generate --set values.global.istioNamespace=${ISTIO_NAMESPACE} --context="${C2_CTX}" -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -235,3 +271,6 @@ spec:
         injectionTemplate: gateway
 EOF
 ) | kubectl apply --context ${C2_CTX} -n ${ISTIO_NAMESPACE} -f -
+
+# Wait for the ingress gateway to be ready
+waitForPods ${ISTIO_NAMESPACE} app=istio-ingressgateway,istio=ingressgateway 10 ${C2_CTX}
