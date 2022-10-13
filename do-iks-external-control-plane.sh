@@ -11,7 +11,10 @@ Black='\033[0;30m'        # Black
 Red='\033[0;31m'          # Red
 Green='\033[0;32m'        # Green
 
+# Get all available kubernetes clusters
 clusters=($(kubectl config get-clusters | tail +2))
+# Sort the clusters so that we always get two first clusters
+IFS=$'\n' clusters=($(sort <<<"${clusters[*]}"))
 if [[ "${#clusters[@]}" < 2 ]]; then
   echo "Need at least two clusters to do external control plane, found ${#clusters[@]}"
   exit 1
@@ -29,8 +32,10 @@ ISTIO_NAMESPACE=external-istiod
 
 # If there is a parameter, that means this is a delete, so remove everything
 if [[ $1 != '' ]]; then
-  istioctl --context ${C1_CTX} uninstall --purge -y
-  istioctl --context ${C2_CTX} uninstall --purge -y
+  echo "Removing istio from ${C1_NAME}"
+  istioctl --context ${C1_CTX} uninstall --purge -y || true
+  echo "Removing istio from ${C2_NAME}"
+  istioctl --context ${C2_CTX} uninstall --purge -y || true
   exit 0
 fi
 
