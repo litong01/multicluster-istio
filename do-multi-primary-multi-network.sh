@@ -5,7 +5,6 @@ Black='\033[0;30m'        # Black
 Red='\033[0;31m'          # Red
 Green='\033[0;32m'        # Green
 
-
 CLUSTER1_NAME=cluster1
 CLUSTER2_NAME=cluster2
 NAMESPACE=istio-system
@@ -191,10 +190,12 @@ WORKLOADNS=sample
 export CTX_NS=${WORKLOADNS}
 export CTX_CLUSTER=kind-${CLUSTER1_NAME}
 verification/helloworld.sh v1
+kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 # deploy helloworld and sleep onto cluster2 as v2 helloworld
 export CTX_CLUSTER=kind-${CLUSTER2_NAME}
 verification/helloworld.sh v2
+kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 # verify the traffic
 function verify() {

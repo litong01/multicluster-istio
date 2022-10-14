@@ -210,7 +210,7 @@ if [[ "${CNI}" == "calico" ]]; then
 fi
 
 # Setup metallb using a specific version
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.4/config/manifests/metallb-native.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.5/config/manifests/metallb-native.yaml
 
 # The following scripts are to make sure that the kube configuration for the cluster
 # is not using loopback ip as part of the api server endpoint. Without doing this,
@@ -257,6 +257,12 @@ spec:
   addresses:
     ${ipv4Range}
     ${ipv6Range}
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: empty
+  namespace: metallb-system
 EOF
 
 # Wait for the public IP address to become available.
