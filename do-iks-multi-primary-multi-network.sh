@@ -5,8 +5,6 @@ Black='\033[0;30m'        # Black
 Red='\033[0;31m'          # Red
 Green='\033[0;32m'        # Green
 
-SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-
 # Get all available kubernetes clusters
 clusters=($(kubectl config get-clusters | tail +2))
 # Sort the clusters so that we always get two first clusters
@@ -209,13 +207,13 @@ export CTX_CLUSTER=${C1_CTX}
 verification/helloworld.sh v1
 
 # create gateway and virtual service
-kubectl apply --context="${C1_CTX}" -n ${CTX_NS} -f $SRCDIR/verification/helloworld-gateway.yaml
+kubectl apply --context="${C1_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 # deploy the v2 in the second cluster
 export CTX_CLUSTER=${C2_CTX}
 verification/helloworld.sh v2
 # create gateway and virtual service
-kubectl apply --context="${C2_CTX}" -n ${CTX_NS} -f $SRCDIR/verification/helloworld-gateway.yaml
+kubectl apply --context="${C2_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 
 # verify the traffic
