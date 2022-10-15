@@ -54,22 +54,42 @@ echo -e "Hub: ${Green}${HUB}${ColorOff}"
 echo -e "Tag: ${Green}${TAG}${ColorOff}"
 echo ""
 
-# Now create the namespace
+./makecerts.sh -d
+./makecerts.sh -c ${C1_CTX} -s $NAMESPACE -n ${C1_NAME}
+./makecerts.sh -c ${C2_CTX} -s $NAMESPACE -n ${C2_NAME}
+
 kubectl create --context="${C1_CTX}" namespace $NAMESPACE --dry-run=client -o yaml \
-    | kubectl apply --context="${C1_CTX}" -f -
+   | kubectl apply --context="${C1_CTX}" -f -
 kubectl --context ${C1_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=network1
 
 kubectl create --context="${C2_CTX}" namespace $NAMESPACE --dry-run=client -o yaml \
     | kubectl apply --context="${C2_CTX}" -f -
-kubectl create --context ${C2_CTX} namespace $NAMESPACE
 kubectl --context ${C2_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=network2
-kubectl --context ${C2_CTX} --overwrite=true annotate namespace ${NAMESPACE} topology.istio.io/controlPlaneClusters=*
+
+function waitForPods() {
+  ns=$1
+  lb=$2
+  waittime=$3
+  ctx=$4
+
+  # Wait for the pods to be ready in the given namespace with lable
+  while : ; do
+    res=$(kubectl wait --context "${ctx}" -n ${ns} pod \
+      -l ${lb} --for=condition=Ready --timeout=${waittime}s 2>/dev/null ||true)
+    if [[ "${res}" == *"condition met"* ]]; then
+      break
+    fi
+    echo -e "Waiting for pods in namespace ${Green}${ns}${ColorOff} with label ${Green}${lb}${ColorOff} in ${Green}${ctx}${ColorOff} to be ready..."
+    sleep ${waittime}
+  done
+}
 
 # Install istio onto the first cluster, the port 8080 was added for http traffic
 function installIstio() {
 CTX=$1
 CTXNAME=$2
 NETWORKNAME=$3
+echo -e "Installing Istio onto ${Green}${CTXNAME}${RolorOff}..."
 cat <<EOF | istioctl --context="${CTX}" install -y -f -
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -100,11 +120,6 @@ spec:
         topology.istio.io/network: ${NETWORKNAME}
       enabled: true
       k8s:
-        env:
-        - name: ISTIO_META_ROUTER_MODE
-          value: "sni-dnat"
-        - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-          value: ${NETWORKNAME}
         service:
           ports:
           - name: status-port
@@ -121,36 +136,6 @@ spec:
             targetPort: 15017
 EOF
 }
-
-function createCrossNetworkGateway() {
-CTX=$1
-# Expose the services in the first cluster
-cat << EOF | kubectl --context="${CTX}" apply -n $NAMESPACE -f -
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: cross-network-gateway
-spec:
-  selector:
-    istio: ingressgateway
-  servers:
-    - port:
-        number: 15443
-        name: tls
-        protocol: TLS
-      tls:
-        mode: AUTO_PASSTHROUGH
-      hosts:
-        - "*.local"
-EOF
-
-}
-
-installIstio ${C1_CTX} ${C1_NAME} network1
-createCrossNetworkGateway ${C1_CTX}
-
-installIstio ${C2_CTX} ${C2_NAME} network2
-createCrossNetworkGateway ${C2_CTX}
 
 function waitForDNS() {
 CTX=$1
@@ -178,22 +163,46 @@ while : ; do
 done
 }
 
-# Wait for these DNS entries to be available
+function createCrossNetworkGateway() {
+CTX=$1
+# Expose the services in the first cluster
+cat << EOF | kubectl --context="${CTX}" apply -n $NAMESPACE -f -
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: cross-network-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 15443
+        name: tls
+        protocol: TLS
+      tls:
+        mode: AUTO_PASSTHROUGH
+      hosts:
+        - "*.local"
+EOF
+}
+
+installIstio ${C1_CTX} ${C1_NAME} network1
 waitForDNS ${C1_CTX}
+createCrossNetworkGateway ${C1_CTX}
+
+installIstio ${C2_CTX} ${C2_NAME} network2
 waitForDNS ${C2_CTX}
+createCrossNetworkGateway ${C2_CTX}
 
 # Install a remote secret in the second cluster that provides access to
 # the first cluster API server
 istioctl x create-remote-secret --context="${C1_CTX}" \
-    --name=${C1_NAME} | \
-    kubectl apply --context="${C2_CTX}" -f -
+    --name=${C1_NAME} | kubectl apply --context="${C2_CTX}" -f -
 
 # Install a remote secret in the first cluster that provides access to
 # the second cluster API server
 istioctl x create-remote-secret --context="${C2_CTX}" \
-    --name=${C2_NAME} | \
-    kubectl apply --context="${C1_CTX}" -f -
-
+    --name=${C2_NAME} | kubectl apply --context="${C1_CTX}" -f -
 
 exit 0
 
@@ -207,13 +216,13 @@ export CTX_CLUSTER=${C1_CTX}
 verification/helloworld.sh v1
 
 # create gateway and virtual service
-kubectl apply --context="${C1_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
+# kubectl apply --context="${C1_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 # deploy the v2 in the second cluster
 export CTX_CLUSTER=${C2_CTX}
 verification/helloworld.sh v2
 # create gateway and virtual service
-kubectl apply --context="${C2_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
+# kubectl apply --context="${C2_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 
 # verify the traffic

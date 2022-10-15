@@ -190,12 +190,14 @@ WORKLOADNS=sample
 export CTX_NS=${WORKLOADNS}
 export CTX_CLUSTER=kind-${CLUSTER1_NAME}
 verification/helloworld.sh v1
-kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
+# this is not needed
+# kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 # deploy helloworld and sleep onto cluster2 as v2 helloworld
 export CTX_CLUSTER=kind-${CLUSTER2_NAME}
 verification/helloworld.sh v2
-kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
+# this is not needed
+# kubectl apply --context="${CTX_CLUSTER}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
 
 # verify the traffic
 function verify() {
