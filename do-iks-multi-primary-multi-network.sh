@@ -176,7 +176,7 @@ function waitForDNS() {
 CTX=$1
 while : ; do
   EXTERNAL_ISTIOD_ADDR=$(kubectl get --context ${CTX} -n $NAMESPACE \
-    service/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+    service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
 
   if [[ ! -z $EXTERNAL_ISTIOD_ADDR ]]; then
       # We need to make sure that DNS entry has been propergated, otherwise, config
@@ -244,36 +244,35 @@ exit 0
 # these steps are for verify traffic happens across the boundary of the two clusters.
 # deploy helloworld and sleep onto cluster1 as v1 helloworld
 
-export CTX_NS=sample
-
-# Deploy the v1 in first cluster
-export CTX_CLUSTER=${C1_CTX}
-verification/helloworld.sh v1
-
-# create gateway and virtual service
-# kubectl apply --context="${C1_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
-
-# deploy the v2 in the second cluster
-export CTX_CLUSTER=${C2_CTX}
-verification/helloworld.sh v2
-# create gateway and virtual service
-# kubectl apply --context="${C2_CTX}" -n ${CTX_NS} -f verification/helloworld-gateway.yaml
-
+verification/iks-helloworld.sh
 
 # verify the traffic
 function verify() {
-  CTX=$1
-  # get sleep podname
-  PODNAME=$(kubectl get pod --context="${CTX}" -n ${CTX_NS} -l \
-    app=sleep -o jsonpath='{.items[0].metadata.name}')
-
-  echo -e ${Green}Ready to hit the helloworld service from ${PODNAME} in ${CLUSTERNAME} ${ColorOff}
-  x=1; while [ $x -le 30 ]; do
-    kubectl exec --context="${CTX}" -n ${CTX_NS} -c sleep ${PODNAME} \
-      -- curl -sS helloworld.${CTX_NS}.svc.cluster.local:5000/hello
+  EP=$1
+  echo -e ${Green}Ready to hit the helloworld service @ ${EP} in ${ColorOff}
+  x=1; while [ $x -le 10 ]; do
+    curl -sS ${EP}:15443/hello -H "Host: helloworld.sample.svc.cluster.local"
     x=$(( $x + 1 ))
   done
 }
 
-verify ${C1_CTX}
-verify ${C2_CTX}
+clusters=($(kubectl config get-clusters | tail +2))
+# Sort the clusters so that we always get two first clusters
+IFS=$'\n' clusters=($(sort -r <<<"${clusters[*]}"))
+if [[ "${#clusters[@]}" < 2 ]]; then
+  echo "Need at least two clusters to do external control plane, found ${#clusters[@]}"
+  exit 1
+fi
+
+# Setup cluster context information
+C1_CTX="${clusters[0]}"
+C2_CTX="${clusters[1]}"
+
+C1_SE_ADDR=$(kubectl get --context ${C1_CTX} -n istio-system \
+  service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+
+C2_SE_ADDR=$(kubectl get --context ${C1_CTX} -n istio-system \
+  service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+
+verify $C2_SE_ADDR
+verify $C1_SE_ADDR
