@@ -39,7 +39,7 @@ fi
 
 LOADIMAGE=""
 HUB="istio"
-istioctlversion=$(istioctl version 2>/dev/null|head -1)
+istioctlversion=$(istioctl version 2>/dev/null|head -1|cut -d ':' -f 2)
 if [[ "${istioctlversion}" == *"-dev" ]]; then
   LOADIMAGE="-l"
   HUB="localhost:5000"
@@ -57,6 +57,39 @@ echo ""
 ./makecerts.sh -d
 ./makecerts.sh -c ${C1_CTX} -s $NAMESPACE -n ${C1_NAME}
 ./makecerts.sh -c ${C2_CTX} -s $NAMESPACE -n ${C2_NAME}
+
+function createLB() {
+# Create a loadBalancer service to expose Istio service to other clusters
+CTX=$1
+cat <<EOF | kubectl apply --context="${CTX}" -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: istio-ingressgateway
+  namespace: $NAMESPACE
+spec:
+  type: LoadBalancer
+  ports:
+  - name: status-port
+    port: 15021
+    targetPort: 15021
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: istio-eastwestgateway
+  namespace: $NAMESPACE
+spec:
+  type: LoadBalancer
+  selector:
+    istio: ingressgateway
+    app: istio-ingressgateway
+  ports:
+  - name: http-port
+    port: 15443
+    targetPort: 15443
+EOF
+}
 
 kubectl create --context="${C1_CTX}" namespace $NAMESPACE --dry-run=client -o yaml \
    | kubectl apply --context="${C1_CTX}" -f -
@@ -120,14 +153,16 @@ spec:
         topology.istio.io/network: ${NETWORKNAME}
       enabled: true
       k8s:
+        env:
+        - name: ISTIO_META_ROUTER_MODE
+          value: "sni-dnat"
+        - name: ISTIO_META_REQUESTED_NETWORK_VIEW
+          value: ${NETWORKNAME}
         service:
           ports:
           - name: status-port
             port: 15021
             targetPort: 15021
-          - name: tls
-            port: 15443
-            targetPort: 15443
           - name: tls-istiod
             port: 15012
             targetPort: 15012
@@ -177,19 +212,19 @@ spec:
   servers:
     - port:
         number: 15443
-        name: tls
-        protocol: TLS
-      tls:
-        mode: AUTO_PASSTHROUGH
+        name: http
+        protocol: HTTP
       hosts:
         - "*.local"
 EOF
 }
 
-installIstio ${C1_CTX} ${C1_NAME} network1
+createLB ${C1_CTX}
 waitForDNS ${C1_CTX}
+installIstio ${C1_CTX} ${C1_NAME} network1
 createCrossNetworkGateway ${C1_CTX}
 
+createLB ${C2_CTX}
 installIstio ${C2_CTX} ${C2_NAME} network2
 waitForDNS ${C2_CTX}
 createCrossNetworkGateway ${C2_CTX}
@@ -233,7 +268,7 @@ function verify() {
     app=sleep -o jsonpath='{.items[0].metadata.name}')
 
   echo -e ${Green}Ready to hit the helloworld service from ${PODNAME} in ${CLUSTERNAME} ${ColorOff}
-  x=1; while [ $x -le 5 ]; do
+  x=1; while [ $x -le 30 ]; do
     kubectl exec --context="${CTX}" -n ${CTX_NS} -c sleep ${PODNAME} \
       -- curl -sS helloworld.${CTX_NS}.svc.cluster.local:5000/hello
     x=$(( $x + 1 ))
