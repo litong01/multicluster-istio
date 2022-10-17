@@ -73,21 +73,6 @@ spec:
   - name: status-port
     port: 15021
     targetPort: 15021
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: istio-eastwestgateway
-  namespace: $NAMESPACE
-spec:
-  type: LoadBalancer
-  selector:
-    istio: ingressgateway
-    app: istio-ingressgateway
-  ports:
-  - name: http-port
-    port: 15443
-    targetPort: 15443
 EOF
 }
 
@@ -169,6 +154,10 @@ spec:
           - name: tls-webhook
             port: 15017
             targetPort: 15017
+          - name: http
+            port: 15443
+            targetPort: 15443
+            protocol: TCP
 EOF
 }
 
@@ -176,7 +165,7 @@ function waitForDNS() {
 CTX=$1
 while : ; do
   EXTERNAL_ISTIOD_ADDR=$(kubectl get --context ${CTX} -n $NAMESPACE \
-    service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+    service/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
 
   if [[ ! -z $EXTERNAL_ISTIOD_ADDR ]]; then
       # We need to make sure that DNS entry has been propergated, otherwise, config
@@ -215,7 +204,7 @@ spec:
         name: http
         protocol: HTTP
       hosts:
-        - "*.local"
+        - "*"
 EOF
 }
 
@@ -225,8 +214,8 @@ installIstio ${C1_CTX} ${C1_NAME} network1
 createCrossNetworkGateway ${C1_CTX}
 
 createLB ${C2_CTX}
-installIstio ${C2_CTX} ${C2_NAME} network2
 waitForDNS ${C2_CTX}
+installIstio ${C2_CTX} ${C2_NAME} network2
 createCrossNetworkGateway ${C2_CTX}
 
 # Install a remote secret in the second cluster that provides access to

@@ -34,7 +34,7 @@ function createVSAndServiceEntry() {
 CTX=$1
 CTXNS=$2
 SERVICEENTRYHOST=$3
-echo -e "Current context: ${Green}${C1_CTX}${ColorOff}"
+echo -e "Current context: ${Green}${CTX}${ColorOff}"
 echo "Create Hello world Virtual Service and Service Entry..."
 cat << EOF | kubectl apply --context "${CTX}" -n "${CTXNS}" -f -
 ---
@@ -95,7 +95,7 @@ VERSION=$3
 echo -e "Current context: ${Green}${C1_CTX}${ColorOff}"
 echo "Deploying Hello world and sleep work load..."
 
-kubectl create --context="${CTX}" namespace $CTXNS --dry-run=client -o yaml \
+kubectl create --context="${CTX}" namespace ${CTXNS} --dry-run=client -o yaml \
    | kubectl apply --context="${CTX}" -f -
 
 cat << EOF | kubectl apply --context "${CTX}" -n "${CTXNS}" -f -
@@ -209,12 +209,12 @@ deployHelloworldAndSleep ${C1_CTX} ${CTX_NS} v1
 deployHelloworldAndSleep ${C2_CTX} ${CTX_NS} v2
 
 C1_PUBLIC_ADDR=$(kubectl get --context ${C1_CTX} -n istio-system \
-  service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+  service/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
 echo
 echo -e "${Green}${C1_CTX} public endpoint: ${C1_PUBLIC_ADDR}${ColorOff}"
 
 C2_PUBLIC_ADDR=$(kubectl get --context ${C2_CTX} -n istio-system \
-  service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+  service/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
 echo
 echo -e "${Green}${C2_CTX} public endpoint: ${C2_PUBLIC_ADDR}${ColorOff}"
 
