@@ -22,11 +22,10 @@ CTX_NS="${CTX_NS:-sample}"
 
 # if the parameter is del, then we delete these helloworld services and deployments
 if [[ "${1,,}" == 'del' ]]; then
-  echo "Removing hello world deployments..."
-  alldeployments=$(kubectl get --context ${C1_CTX} -n ${CTX_NS} deployment | grep helloworld|cut -d ' ' -f1)
-  kubectl delete --context ${C1_CTX} -n ${CTX_NS} deployment $alldeployments
-  kubectl delete --context ${C1_CTX} -n ${CTX_NS} services helloworld
-  kubectl delete --context ${CTX_CLUSTER} namespace ${CTX_NS}
+  echo "Removing namespace ${CTX_NS} from ${C1_CTX}..."
+  kubectl delete --context ${C1_CTX} namespace ${CTX_NS}
+  echo "Removing namespace ${CTX_NS} from ${C2_CTX}..."
+  kubectl delete --context ${C2_CTX} namespace ${CTX_NS}
   exit 0
 fi
 
