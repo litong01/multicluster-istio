@@ -8,7 +8,7 @@ Green='\033[0;32m'        # Green
 # Get all available kubernetes clusters
 clusters=($(kubectl config get-clusters | tail +2))
 # Sort the clusters so that we always get two first clusters
-IFS=$'\n' clusters=($(sort -r <<<"${clusters[*]}"))
+IFS=$'\n' clusters=($(sort <<<"${clusters[*]}"))
 if [[ "${#clusters[@]}" < 2 ]]; then
   echo "Need at least two clusters to do external control plane, found ${#clusters[@]}"
   exit 1

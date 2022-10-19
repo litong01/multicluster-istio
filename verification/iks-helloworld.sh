@@ -9,7 +9,7 @@ Green='\033[0;32m'        # Green
 # Get all available kubernetes clusters
 clusters=($(kubectl config get-clusters | tail +2))
 # Sort the clusters so that we always get two first clusters
-IFS=$'\n' clusters=($(sort -r <<<"${clusters[*]}"))
+IFS=$'\n' clusters=($(sort <<<"${clusters[*]}"))
 if [[ "${#clusters[@]}" < 2 ]]; then
   echo "Need at least two clusters to do external control plane, found ${#clusters[@]}"
   exit 1
@@ -95,6 +95,9 @@ echo "Deploying Hello world and sleep work load..."
 
 kubectl create --context="${CTX}" namespace ${CTXNS} --dry-run=client -o yaml \
    | kubectl apply --context="${CTX}" -f -
+kubectl label --context="${CTX}" namespace ${CTXNS} \
+   --overwrite istio-injection=enabled
+
 
 cat << EOF | kubectl apply --context "${CTX}" -n "${CTXNS}" -f -
 apiVersion: v1
