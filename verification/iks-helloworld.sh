@@ -44,7 +44,7 @@ metadata:
   name: helloworld
 spec:
   hosts:
-  - "*.local"
+  - "*-us-south.lb.appdomain.cloud"
   gateways:
   - istio-system/cross-network-gateway
   http:
@@ -53,7 +53,7 @@ spec:
         exact: /hello
       headers:
         incluster:
-          exact: "tong"
+          exact: "true"
     route:
     - destination:
         host: helloworld
@@ -69,8 +69,7 @@ spec:
       headers:
         request:
           set:
-            incluster: "tong"
-            host: "helloworld.sample.svc.cluster.local"
+            incluster: "true"
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: ServiceEntry

@@ -240,7 +240,7 @@ function verify() {
   EP=$1
   echo -e ${Green}Ready to hit the helloworld service @ ${EP} in ${ColorOff}
   x=1; while [ $x -le 10 ]; do
-    curl -sS ${EP}:15443/hello -H "Host: helloworld.sample.svc.cluster.local"
+    curl -sS ${EP}:15443/hello
     x=$(( $x + 1 ))
   done
 }
@@ -258,10 +258,10 @@ C1_CTX="${clusters[0]}"
 C2_CTX="${clusters[1]}"
 
 C1_SE_ADDR=$(kubectl get --context ${C1_CTX} -n istio-system \
-  service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+  service/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
 
 C2_SE_ADDR=$(kubectl get --context ${C1_CTX} -n istio-system \
-  service/istio-eastwestgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
+  service/istio-ingressgateway -o jsonpath='{ .status.loadBalancer.ingress[0].hostname}')
 
 verify $C2_SE_ADDR
 verify $C1_SE_ADDR
