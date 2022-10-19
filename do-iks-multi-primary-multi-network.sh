@@ -28,10 +28,10 @@ NAMESPACE=istio-system
 if [[ $1 != '' ]]; then
   echo "Removing istio from ${C1_NAME}"
   istioctl --context ${C1_CTX} uninstall --purge -y --force || true
-  # Do not delete the service, since it will take a while to allocate
-  # reuse it
-  # kubectl delete --context ${C1_CTX} -n ${ISTIO_NAMESPACE} \
-  #   --ignore-not-found=true service/istio-endpoint-service || true
+  kubectl --context ${C1_CTX} delete -n ${NAMESPACE} secrets cacerts >/dev/null 2>&1 || true
+  kubectl --context ${C1_CTX} delete -n ${NAMESPACE} configmap \
+    istio-ca-root-cert istio-gateway-deployment-leader istio-gateway-status-leader \
+    istio-leader istio-namespace-controller-election >/dev/null 2>&1 || true
   echo "Removing istio from ${C2_NAME}"
   istioctl --context ${C2_CTX} uninstall --purge -y || true
   exit 0
@@ -54,9 +54,9 @@ echo -e "Hub: ${Green}${HUB}${ColorOff}"
 echo -e "Tag: ${Green}${TAG}${ColorOff}"
 echo ""
 
-./makecerts.sh -d
-./makecerts.sh -c ${C1_CTX} -s $NAMESPACE -n ${C1_NAME}
-./makecerts.sh -c ${C2_CTX} -s $NAMESPACE -n ${C2_NAME}
+# ./makecerts.sh -d
+# ./makecerts.sh -c ${C1_CTX} -s $NAMESPACE -n ${C1_NAME}
+# ./makecerts.sh -c ${C2_CTX} -s $NAMESPACE -n ${C2_NAME}
 
 function createLB() {
 # Create a loadBalancer service to expose Istio service to other clusters
