@@ -274,3 +274,20 @@ EOF
 
 # Wait for the ingress gateway to be ready
 waitForPods ${ISTIO_NAMESPACE} app=istio-ingressgateway,istio=ingressgateway 10 ${C2_CTX}
+
+exit 0
+
+# verify
+
+
+ColorOff='\033[0m'        # Text Reset
+Green='\033[0;32m'        # Green
+
+function verify() {
+  EP=$1
+  echo -e ${Green}Ready to hit the helloworld service @ ${EP} in ${ColorOff}
+  x=1; while [ $x -le 10 ]; do
+    curl -sS ${EP}/hello
+    x=$(( $x + 1 ))
+  done
+}

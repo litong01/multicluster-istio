@@ -11,11 +11,11 @@ spec:
     istio: ingressgateway # use istio default controller
   servers:
   - port:
-      number: 8080
-      name: http
+      number: 80
+      name: http2
       protocol: HTTP
     hosts:
-    - "*.local"
+    - "*us-south.lb.appdomain.cloud"
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
@@ -23,7 +23,7 @@ metadata:
   name: helloworld
 spec:
   hosts:
-  - "*.local"
+  - "*us-south.lb.appdomain.cloud"
   gateways:
   - helloworld-gateway
   http:
@@ -38,8 +38,22 @@ spec:
           number: 5000
       weight: 50
     - destination:
-        host: helloworld.sample.svc.cluster.local.global
+        host: helloworld
         subset: v1
         port:
-          number: 8080
+          number: 5000
       weight: 50
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: helloworld-destination-dr
+spec:
+  host: helloworld.sample.svc.cluster.local
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
