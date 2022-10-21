@@ -43,7 +43,7 @@ metadata:
   name: helloworld
 spec:
   hosts:
-  - "*-us-south.lb.appdomain.cloud"
+  - "*.lb.appdomain.cloud"
   gateways:
   - istio-system/cross-network-gateway
   http:
@@ -98,6 +98,9 @@ kubectl create --context="${CTX}" namespace ${CTXNS} --dry-run=client -o yaml \
 kubectl label --context="${CTX}" namespace ${CTXNS} \
    --overwrite istio-injection=enabled
 
+
+kubectl label --context="${CTX}" namespace ${CTXNS} \
+   --overwrite istio-injection=enabled
 
 cat << EOF | kubectl apply --context "${CTX}" -n "${CTXNS}" -f -
 apiVersion: v1

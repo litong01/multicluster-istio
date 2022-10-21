@@ -47,7 +47,7 @@ set -e
 
 LOADIMAGE=""
 HUB="istio"
-istioctlversion=$(istioctl version 2>/dev/null|head -1)
+istioctlversion=$(istioctl version 2>/dev/null|head -1|cut -d ':' -f 2)
 if [[ "${istioctlversion}" == *"-dev" ]]; then
   LOADIMAGE="-l"
   HUB="localhost:5000"

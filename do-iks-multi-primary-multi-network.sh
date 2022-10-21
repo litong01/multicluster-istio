@@ -70,19 +70,19 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
-  - name: status-port
-    port: 15021
-    targetPort: 15021
+  - name: http-port
+    port: 15443
+    targetPort: 15443
 EOF
 }
 
 kubectl create --context="${C1_CTX}" namespace $NAMESPACE --dry-run=client -o yaml \
    | kubectl apply --context="${C1_CTX}" -f -
-kubectl --context ${C1_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=network1
+kubectl --context ${C1_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=${C1_NAME}
 
 kubectl create --context="${C2_CTX}" namespace $NAMESPACE --dry-run=client -o yaml \
     | kubectl apply --context="${C2_CTX}" -f -
-kubectl --context ${C2_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=network2
+kubectl --context ${C2_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=${C2_NAME}
 
 function waitForPods() {
   ns=$1
@@ -106,7 +106,6 @@ function waitForPods() {
 function installIstio() {
 CTX=$1
 CTXNAME=$2
-NETWORKNAME=$3
 echo -e "Installing Istio onto ${Green}${CTXNAME}${RolorOff}..."
 cat <<EOF | istioctl --context="${CTX}" install -y -f -
 apiVersion: install.istio.io/v1alpha1
@@ -125,7 +124,7 @@ spec:
       meshID: mesh1
       multiCluster:
         clusterName: ${CTXNAME}
-      network: ${NETWORKNAME}
+      network: ${CTXNAME}
       istioNamespace: ${NAMESPACE}
       logging:
         level: "default:info"
@@ -135,14 +134,14 @@ spec:
       label:
         istio: ingressgateway
         app: istio-ingressgateway
-        topology.istio.io/network: ${NETWORKNAME}
+        topology.istio.io/network: ${CTXNAME}
       enabled: true
       k8s:
         env:
         - name: ISTIO_META_ROUTER_MODE
           value: "sni-dnat"
         - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-          value: ${NETWORKNAME}
+          value: ${CTXNAME}
         service:
           ports:
           - name: status-port
@@ -210,12 +209,12 @@ EOF
 
 createLB ${C1_CTX}
 waitForDNS ${C1_CTX}
-installIstio ${C1_CTX} ${C1_NAME} network1
+installIstio ${C1_CTX} ${C1_NAME}
 createCrossNetworkGateway ${C1_CTX}
 
 createLB ${C2_CTX}
 waitForDNS ${C2_CTX}
-installIstio ${C2_CTX} ${C2_NAME} network2
+installIstio ${C2_CTX} ${C2_NAME}
 createCrossNetworkGateway ${C2_CTX}
 
 # Install a remote secret in the second cluster that provides access to
