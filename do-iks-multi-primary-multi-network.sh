@@ -142,21 +142,6 @@ spec:
           value: "sni-dnat"
         - name: ISTIO_META_REQUESTED_NETWORK_VIEW
           value: ${CTXNAME}
-        service:
-          ports:
-          - name: status-port
-            port: 15021
-            targetPort: 15021
-          - name: tls-istiod
-            port: 15012
-            targetPort: 15012
-          - name: tls-webhook
-            port: 15017
-            targetPort: 15017
-          - name: http
-            port: 15443
-            targetPort: 15443
-            protocol: TCP
 EOF
 }
 
