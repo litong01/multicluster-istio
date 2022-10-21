@@ -78,11 +78,11 @@ EOF
 
 kubectl create --context="${C1_CTX}" namespace $NAMESPACE --dry-run=client -o yaml \
    | kubectl apply --context="${C1_CTX}" -f -
-kubectl --context ${C1_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=network1
+kubectl --context ${C1_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=${C1_NAME}
 
 kubectl create --context="${C2_CTX}" namespace $NAMESPACE --dry-run=client -o yaml \
     | kubectl apply --context="${C2_CTX}" -f -
-kubectl --context ${C2_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=network2
+kubectl --context ${C2_CTX} --overwrite=true label namespace $NAMESPACE topology.istio.io/network=${C2_NAME}
 
 function waitForPods() {
   ns=$1
@@ -209,12 +209,12 @@ EOF
 
 createLB ${C1_CTX}
 waitForDNS ${C1_CTX}
-installIstio ${C1_CTX} ${C1_NAME} network1
+installIstio ${C1_CTX} ${C1_NAME}
 createCrossNetworkGateway ${C1_CTX}
 
 createLB ${C2_CTX}
 waitForDNS ${C2_CTX}
-installIstio ${C2_CTX} ${C2_NAME} network2
+installIstio ${C2_CTX} ${C2_NAME}
 createCrossNetworkGateway ${C2_CTX}
 
 # Install a remote secret in the second cluster that provides access to
