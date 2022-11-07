@@ -13,15 +13,8 @@ if [[ $1 != '' ]]; then
   exit 0
 fi
 
-kind create cluster --config=- <<EOF
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-name: ambient
-nodes:
-- role: control-plane
-- role: worker
-- role: worker
-EOF
+# Use the setupkind script with 2 additional worker node
+setupkind -n ambient -w 2
 
 ./istioctl install -y --set profile=ambient
 
