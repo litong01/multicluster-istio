@@ -36,6 +36,7 @@ function printHelp() {
   echo "    -p|--pod-subnet     - pod subnet, ex. 10.244.0.0/16"
   echo "    -t|--service-subnet - service subnet, ex. 10.96.0.0/16"
   echo "    -c|--cni            - CNI plugin, KindNet or Calico, default is KindNet"
+  echo "    -w|--worker-nodes   - additional worker nodes, default 0"
   echo "    -h|--help           - print the usage of this script"
 }
 
@@ -47,6 +48,7 @@ PODSUBNET=""
 SERVICESUBNET=""
 ACTION=""
 CNI=""
+WORKERNODES=0
 
 FEATURES=$(cat << EOF
 featureGates:
@@ -99,6 +101,8 @@ while [[ $# -gt 0 ]]; do
       SERVICESUBNET="serviceSubnet: ${2,,}";shift 2;;
     -c|--cni)
       CNI="${2,,}";shift 2;;
+    -w|--worker-nodes)
+      WORKERNODES="$(($2+0))";shift 2;;
     -d|--delete)
       ACTION="DEL";shift;;
     *) # unknown option
@@ -151,6 +155,12 @@ if [[ "${isValid}" == "false" ]]; then
   exit 1
 fi
 
+MOREROLE=""
+while [ "$WORKERNODES" -gt 0 ]; do
+  MOREROLE+=$'- role: worker\n'
+  WORKERNODES=$((WORKERNODES-1))
+done
+
 # utility function to wait for pods to be ready
 function waitForPods() {
   ns=$1
@@ -180,6 +190,9 @@ networking:
   ${PODSUBNET}
   ${SERVICESUBNET}
   ${netExtra}
+nodes:
+- role: control-plane
+${MOREROLE}
 EOF
 else
   cat << EOF | kind create cluster "${K8SRELEASE}" --config -
@@ -192,6 +205,9 @@ networking:
   ${PODSUBNET}
   ${SERVICESUBNET}
   ${netExtra}
+nodes:
+- role: control-plane
+${MOREROLE}
 EOF
 fi
 # Setup cluster context
