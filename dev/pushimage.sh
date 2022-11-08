@@ -45,14 +45,7 @@ function pushImagesToRepo() {
 }
 
 if [[ -z "${SOURCETAG}" ]]; then
-  getImageTag 'localhost:5000/pilot*'
-  getImageTag 'localhost:5000/proxyv2*'
-  getImageTag 'localhost:5000/operator*'
-  getImageTag 'localhost:5000/app*'
-  getImageTag 'localhost:5000/ext-authz*'
-  getImageTag 'localhost:5000/app_sidecar_ubuntu_jammy*'
-  getImageTag 'localhost:5000/docker.install-cni*'
-
+  getImageTag 'localhost:5000/*'
 else
   SOURCETAGS+=($SOURCETAG)
 fi

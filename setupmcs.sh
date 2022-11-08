@@ -21,6 +21,7 @@ function printHelp() {
   echo "    -t|--target-dir   - target kubeconfig directory"
   echo "    -d|--delete       - delete a specified cluster or all kind clusters"
   echo "    -l|--load-image   - load the dev image for all cluster"
+  echo "    -w|--worker-nodes - additional worker nodes, default 0"
   echo "    -h|--help         - print the usage of this script"
 }
 
@@ -32,6 +33,7 @@ ACTION=""
 LOADIMAGE="false"
 KIND_REGISTRY_NAME="${KIND_REGISTRY_NAME:-kind-registry}"
 KIND_REGISTRY_PORT="${KIND_REGISTRY_PORT:-5000}"
+WORKERNODES=0
 
 # Handling parameters
 while [[ $# -gt 0 ]]; do
@@ -47,6 +49,8 @@ while [[ $# -gt 0 ]]; do
       ACTION="DEL";shift;;
     -l|--load-image)
       LOADIMAGE="true";shift;;
+    -w|--worker-nodes)
+      WORKERNODES="$(($2+0))";shift 2;;
     *) # unknown option
       echo "parameter $1 is not supported"; exit 1;;
   esac
@@ -109,7 +113,7 @@ function createCluster() {
   for i in $(seq 0 5 "${cInfoLength}"); do
     cname="${cInfo[i]}"
     echo "Creating cluster ${cname} pod-subnet=${cInfo[i+2]} svc-subnet=${cInfo[i+3]} ..."
-    setupkind -n "${cname}" -p "${cInfo[i+2]}" -t "${cInfo[i+3]}" -s "${ss}"
+    setupkind -n "${cname}" -p "${cInfo[i+2]}" -t "${cInfo[i+3]}" -s "${ss}" -w "${WORKERNODES}"
     if [[ -z "${cInfo[i+4]}" ]]; then
       targetfile="${TARGETDIR}/${cInfo[i]}"
     else
