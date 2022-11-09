@@ -53,7 +53,6 @@ WORKERNODES=0
 FEATURES=$(cat << EOF
 featureGates:
   MixedProtocolLBService: true
-  EndpointSlice: true
   GRPCContainerProbe: true
 kubeadmConfigPatches:
   - |
