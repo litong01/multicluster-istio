@@ -13,8 +13,9 @@ if [[ $1 != '' ]]; then
   exit 0
 fi
 
+LOADIMAGE=""
 HUB="istio"
-istioctlversion=$(istioctl version 2>/dev/null|head -1)
+istioctlversion=$(istioctl version 2>/dev/null|head -1|cut -d ':' -f 2)
 if [[ "${istioctlversion}" == *"-dev" ]]; then
   LOADIMAGE="-l"
   HUB="localhost:5000"
@@ -31,7 +32,7 @@ echo ""
 
 # Use the setupmcs script with 2 additional worker node
 mkdir -p /tmp/work
-cat <<EOF | setupmcs -w 2 -l
+cat <<EOF | setupmcs -w 2 ${LOADIMAGE}
 [{
   "kind": "Kubernetes",
   "clusterName": "ambient",
@@ -44,8 +45,12 @@ cat <<EOF | setupmcs -w 2 -l
 }]
 EOF
 
-istioctl install -y --set profile=ambient \
-  --set values.global.hub=${HUB} --set values.global.tag=${TAG}
+if [[ -z ${LOADIMAGE} ]]; then
+  istioctl install -y --set profile=ambient
+else
+  istioctl install -y --set profile=ambient \
+    --set values.global.hub=${HUB} --set values.global.tag=${TAG}
+fi
 
 # make sure istiod pod is ready
 kubectl wait -n istio-system pod \
