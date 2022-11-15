@@ -13,10 +13,39 @@ if [[ $1 != '' ]]; then
   exit 0
 fi
 
-# Use the setupkind script with 2 additional worker node
-setupkind -n ambient -w 2
+HUB="istio"
+istioctlversion=$(istioctl version 2>/dev/null|head -1)
+if [[ "${istioctlversion}" == *"-dev" ]]; then
+  LOADIMAGE="-l"
+  HUB="localhost:5000"
+  if [[ -z "${TAG}" ]]; then
+    TAG=$(docker images "localhost:5000/pilot:*" --format "{{.Tag}}")
+  fi
+fi
+TAG="${TAG:-${istioctlversion}}"
 
-./istioctl install -y --set profile=ambient
+echo ""
+echo -e "Hub: ${Green}${HUB}${ColorOff}"
+echo -e "Tag: ${Green}${TAG}${ColorOff}"
+echo ""
+
+# Use the setupmcs script with 2 additional worker node
+mkdir -p /tmp/work
+cat <<EOF | setupmcs -w 2 -l
+[{
+  "kind": "Kubernetes",
+  "clusterName": "ambient",
+  "podSubnet": "10.30.0.0/16",
+  "svcSubnet": "10.255.30.0/24",
+  "network": "network-1",
+  "meta": {
+    "kubeconfig": "/tmp/work/ambient"
+  }
+}]
+EOF
+
+istioctl install -y --set profile=ambient \
+  --set values.global.hub=${HUB} --set values.global.tag=${TAG}
 
 # make sure istiod pod is ready
 kubectl wait -n istio-system pod \
