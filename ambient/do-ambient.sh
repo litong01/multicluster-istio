@@ -6,11 +6,16 @@ Red='\033[0;31m'          # Red
 Green='\033[0;32m'        # Green
 
 SRCDIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ZTUNNEL=""
 
 # support delete everything
-if [[ $1 != '' ]]; then
+if [[ "${1,,}" == "del" ]]; then
   setupmcs -d
   exit 0
+elif [[ "${1,,}" == "ztunnel" ]]; then
+  ZTUNNEL='--set values.ztunnel.image=ztunnel'
+else
+  ZTUNNEL=''
 fi
 
 LOADIMAGE=""
@@ -46,10 +51,10 @@ cat <<EOF | setupmcs -w 2 ${LOADIMAGE}
 EOF
 
 if [[ -z ${LOADIMAGE} ]]; then
-  istioctl install -y --set profile=ambient
+  istioctl install -y --set profile=ambient ${ZTUNNEL}
 else
   istioctl install -y --set profile=ambient \
-    --set values.global.hub=${HUB} --set values.global.tag=${TAG}
+    --set values.global.hub=${HUB} --set values.global.tag=${TAG} ${ZTUNNEL}
 fi
 
 # make sure istiod pod is ready
@@ -68,6 +73,7 @@ kubectl wait -n istio-system pod \
 kubectl apply -f $SRCDIR/bookinfo.yaml
 kubectl apply -f $SRCDIR/sleep.yaml
 kubectl apply -f $SRCDIR/notsleep.yaml
+kubectl apply -f $SRCDIR/bookinfo-gateway.yaml
 
 kubectl label namespace default istio.io/dataplane-mode=ambient
 
