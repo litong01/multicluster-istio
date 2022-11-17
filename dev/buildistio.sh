@@ -4,6 +4,13 @@
 # to load the images to kind cluster for tests or use pushimage script
 # to push the images to a container image registry
 
+# To build ztunnel docker image with latest rust code, do the following
+# notice that the SHA used in the example is the latest SHA commit at
+# the time of this writing. It will certainly change
+#   export ZTUNNEL_REPO_SHA=44b255d35eea4803f85b3a18792de844d6173887
+#   buildistio docker.ztunnel
+
+
 function printHelp() {
   echo "Usage: "
   echo "    $0 -v 11.20-dev istioctl"
