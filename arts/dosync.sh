@@ -1,7 +1,8 @@
 #! /bin/bash
 # This script synch master branch with remote staging branch
 # We can certainly use a parameter for this script
-
+# to add a remote upstream, use the following git command
+# git remote add upstream https://github.com/ORIGINAL_OWNER/ORIGINAL_REPOSITORY.git
 
 # Setup some colors
 ColorOff='\033[0m'       # Text Reset
