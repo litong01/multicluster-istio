@@ -185,7 +185,6 @@ apiVersion: kind.x-k8s.io/v1alpha4
 ${FEATURES}
 name: ${CLUSTERNAME}
 networking:
-  apiServerAddress: ${APIIP}
   ipFamily: ${IPFAMILY}
   ${PODSUBNET}
   ${SERVICESUBNET}
@@ -201,7 +200,6 @@ apiVersion: kind.x-k8s.io/v1alpha4
 ${FEATURES}
 name: ${CLUSTERNAME}
 networking:
-  apiServerAddress: ${APIIP}
   ipFamily: ${IPFAMILY}
   ${PODSUBNET}
   ${SERVICESUBNET}

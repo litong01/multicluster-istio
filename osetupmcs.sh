@@ -131,8 +131,10 @@ function createCluster() {
 function addRoutes() {
   for i in $(seq 0 5 "${cInfoLength}"); do
     # Get clusters which share same network for a given cluster and network name
-    allthings=$(echo ${TOPOLOGYCONTENT} | docker run --rm -i imega/jq:1.6 --arg cn ${cInfo[i]} \
-      --arg nn ${cInfo[i+1]} -c \
+    cn=$(echo ${cInfo[i]}|xargs)
+    nn=$(echo ${cInfo[i+1]}|xargs)
+    allthings=$(echo ${TOPOLOGYCONTENT} | docker run --rm -i imega/jq:1.6 --arg cn "${cn}" \
+      --arg nn "${nn}" -c \
       '[ .[] | select( .network == $nn and .clusterName != $cn )] |.[]| .clusterName,.podSubnet,.svcSubnet')
 
     allsubs=($(echo ${allthings}))
@@ -140,12 +142,16 @@ function addRoutes() {
     if [[ "${endloopj}" -gt 0 ]]; then
       echo -e "Adding routes for cluster ${Green}${cInfo[i]}${ColorOff}:"
       for j in $(seq 0 3 "${endloopj}"); do
+        # strip the double quotes
+        thename=$(echo ${allsubs[j]}|xargs)
         # Now get the IP address of the changing cluster public IP
-        ip=$(docker inspect -f '{{ .NetworkSettings.Networks.kind.IPAddress }}' "${allsubs[j]}-control-plane" 2>/dev/null)
+        ip=$(docker inspect -f '{{ .NetworkSettings.Networks.kind.IPAddress }}' "${thename}-control-plane" 2>/dev/null)
         if [[ ! -z "${ip}" ]]; then
-          docker exec "${cInfo[i]}-control-plane" ip route add "${allsubs[j+1]}" via "${ip}"
+          sub1=$(echo ${allsubs[j+1]}|xargs)
+          sub2=$(echo ${allsubs[j+2]}|xargs)
+          docker exec "${cn}-control-plane" ip route add "${sub1}" via "${ip}"
           echo -e "   Route ${Green}${allsubs[j+1]}${ColorOff} via ${Green}${ip}${ColorOff} for cluster ${allsubs[j]} added"
-          docker exec "${cInfo[i]}-control-plane" ip route add "${allsubs[j+2]}" via "${ip}"
+          docker exec "${cn}-control-plane" ip route add "${sub2}" via "${ip}"
           echo -e "   Route ${Green}${allsubs[j+2]}${ColorOff} via ${Green}${ip}${ColorOff} for cluster ${allsubs[j]} added"
         fi
       done
