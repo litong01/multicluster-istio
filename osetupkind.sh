@@ -210,10 +210,6 @@ ${MOREROLE}
 EOF
 fi
 
-exit 0
-
-
-
 # Setup cluster context
 CLUSTERNAME=$(echo $CLUSTERNAME|xargs)
 kubectl cluster-info --context kind-${CLUSTERNAME}
