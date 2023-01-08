@@ -113,7 +113,7 @@ function createCluster() {
   for i in $(seq 0 5 "${cInfoLength}"); do
     cname="${cInfo[i]}"
     echo "Creating cluster ${cname} pod-subnet=${cInfo[i+2]} svc-subnet=${cInfo[i+3]} ..."
-    echo "Script dir ${SCRIPTDIR}"
+    
     osetupkind -n "${cname}" -p "${cInfo[i+2]}" -t "${cInfo[i+3]}" -s "${ss}" -w "${WORKERNODES}"
     if [[ -z "${cInfo[i+4]}" ]]; then
       targetfile="${TARGETDIR}/${cInfo[i]}"
@@ -184,4 +184,3 @@ if [[ "${LOADIMAGE:l}" == "true" ]]; then
   setup_kind_registry
   pushimage
 fi
-
