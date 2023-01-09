@@ -48,7 +48,7 @@ EOF
 )
       MSG=$(cat << EOF
 ${MSG}
-${sv[1]}:${port} ==> ${NEXTPORT}
+${sv[0]}@${CLUSTERNAME} ${sv[1]}:${port} ==> ${NEXTPORT}
 EOF
 )
        STARTPORT=$((NEXTPORT+1))
