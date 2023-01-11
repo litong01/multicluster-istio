@@ -181,6 +181,5 @@ addRoutes
 
 # push localhost images to local image repo if set to do so
 if [[ "${LOADIMAGE:l}" == "true" ]]; then
-  setup_kind_registry
-  pushimage
+  opushimage
 fi
