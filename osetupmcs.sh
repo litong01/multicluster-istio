@@ -32,8 +32,8 @@ TOPOLOGY="$(pwd)/topology.json"
 TOPOLOGYCONTENT=""
 ACTION=""
 LOADIMAGE="false"
-REGISTRY_CNAME="kind-registry"
-KIND_REGISTRY_PORT="${KIND_REGISTRY_PORT:-5000}"
+REGISTRY_NAME="${REGISTRY_NAME:-kind-registry}"
+REGISTRY_PORT="${REGISTRY_PORT:-5001}"
 WORKERNODES=0
 
 # Handling parameters
@@ -98,13 +98,13 @@ function getTopology() {
 
 function setup_kind_registry() {
   # create a registry container if it not running already
-  running="$(docker inspect -f '{{.State.Running}}' "${REGISTRY_CNAME}" 2>/dev/null || true)"
+  running="$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}" 2>/dev/null || true)"
   if [[ "${running}" != 'true' ]]; then
-      docker run -d --restart=always -p "${KIND_REGISTRY_PORT}:5000" \
-        --name "${REGISTRY_CNAME}" registry:2
+      docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" \
+        --name "${REGISTRY_NAME}" registry:2
 
     # Allow kind nodes to reach the registry
-    docker network connect "kind" "${REGISTRY_CNAME}" 2>/dev/null || true
+    docker network connect "kind" "${REGISTRY_NAME}" 2>/dev/null || true
   fi
 }
 
@@ -113,8 +113,13 @@ function createCluster() {
   for i in $(seq 0 5 "${cInfoLength}"); do
     cname="${cInfo[i]}"
     echo "Creating cluster ${cname} pod-subnet=${cInfo[i+2]} svc-subnet=${cInfo[i+3]} ..."
-    
-    osetupkind -n "${cname}" -p "${cInfo[i+2]}" -t "${cInfo[i+3]}" -s "${ss}" -w "${WORKERNODES}"
+
+    if [ ! -f ${SCRIPTDIR}/osetupkind.sh ]; then
+       osetupkind -n "${cname}" -p "${cInfo[i+2]}" -t "${cInfo[i+3]}" -s "${ss}" -w "${WORKERNODES}"
+    else
+       ${SCRIPTDIR}/osetupkind.sh -n "${cname}" -p "${cInfo[i+2]}" -t "${cInfo[i+3]}" -s "${ss}" -w "${WORKERNODES}"
+    fi
+
     if [[ -z "${cInfo[i+4]}" ]]; then
       targetfile="${TARGETDIR}/${cInfo[i]}"
     else
@@ -123,7 +128,7 @@ function createCluster() {
     targetfile=$(echo ${targetfile}|xargs)
     cname=$(echo ${cname}|xargs)
     kind export kubeconfig --name "${cname}" --kubeconfig "${targetfile}"
-  
+
     ss="$(($ss-1))"
   done
 }
