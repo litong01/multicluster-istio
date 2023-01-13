@@ -50,7 +50,8 @@ ACTION=""
 CNI=""
 WORKERNODES=0
 APIIP=$(ifconfig | grep 'inet ' | grep broadcast | cut -d ' ' -f 2)
-REGISTRY_ENDPOINT="${REGISTRY_ENDPOINT:-kind-registry}"
+REGISTRY_NAME="${REGISTRY_NAME:-kind-registry}"
+REGISTRY_PORT="${REGISTRY_PORT:-5001}"
 
 FEATURES=$(cat << EOF
 featureGates:
@@ -77,8 +78,8 @@ kubeadmConfigPatches:
         "service-account-signing-key-file": "/etc/kubernetes/pki/sa.key"
 containerdConfigPatches:
   - |-
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5000"]
-      endpoint = ["http://${REGISTRY_ENDPOINT}:5000"]
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:${REGISTRY_PORT}"]
+      endpoint = ["http://${REGISTRY_NAME}:5000"]
 EOF
 )
 
