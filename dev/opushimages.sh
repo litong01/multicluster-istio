@@ -1,8 +1,14 @@
 #!/bin/bash
-# This script pushes a specified docker image to the local registry
-# If no image is specified, then all the istio images will be pushed.
-# This script is to have the Istio images seeded in the local image
-# registry so that the registry can be used by kind k8s cluster
+# This script pushes or loads specified docker images to a local registry
+# or all the kind clusters.
+#
+# The script should run twice like the following
+# opushimage -s "*-integration"
+# opushimage -s "astra-py-k8s:v0.0.6"
+
+# To load a docker hub image use -l true flag which will load the
+# public image to the nodes. for example:
+# opushimage -s "bitnami/mongodb:5.0.10-debian-11-r3" -l true
 
 function printHelp() {
   echo "Usage: "
@@ -13,6 +19,8 @@ function printHelp() {
   echo "    -l|--load-image    - load to node or push to repo, default to false"
   echo "    -h|--help          - print the usage of this script"
 }
+
+
 
 # Setup default values
 REGISTRY_NAME="${REGISTRY_NAME:-localhost:5001/}"
@@ -38,7 +46,7 @@ done
 function getImageTag() {
   aTag=$(docker images "$1" --format "{{.Repository}}:{{.Tag}}")
   if [[ ! -z "${aTag}" ]]; then
-    SOURCETAGS=($(echo ${aTag}))
+    SOURCETAGS+=($(echo ${aTag}))
   fi
 }
 
