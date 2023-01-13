@@ -65,9 +65,9 @@ if [[ "$ACTION" == "DEL" ]]; then
     kind delete cluster --name "${acluster}"
   done
   # check if the registry container exists
-  registry=$(docker ps -a | grep ${REGISTRY_CNAME} || true)
+  registry=$(docker ps -a | grep ${REGISTRY_NAME} || true)
   if [[ ! -z $registry ]]; then
-    docker rm -f ${REGISTRY_CNAME}
+    docker rm -f ${REGISTRY_NAME}
   fi
   docker volume prune -f
   exit 0
