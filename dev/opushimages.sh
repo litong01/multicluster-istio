@@ -10,12 +10,14 @@ function printHelp() {
   echo ""
   echo "Where:"
   echo "    -s|--source-tag    - source tag of the image"
+  echo "    -l|--load-image    - load to node or push to repo, default to false"
   echo "    -h|--help          - print the usage of this script"
 }
 
 # Setup default values
-LOCAL_REGISTRY_NAME="localhost:5000/"
+REGISTRY_NAME="${REGISTRY_NAME:-localhost:5001/}"
 SOURCETAG=""
+LOAD="false"
 declare -a SOURCETAGS=()
 
 # Handling parameters
@@ -26,6 +28,8 @@ while [[ $# -gt 0 ]]; do
       printHelp; exit 0;;
     -s|--source-tag)
       SOURCETAG="$2";shift;shift;;
+    -l|--load-image)
+      LOAD="${2:l}";shift;shift;;
     *) # unknown option
       echo "parameter $1 is not supported"; exit 1;;
   esac
@@ -38,23 +42,43 @@ function getImageTag() {
   fi
 }
 
-function pushImagesToRepo() {
+function loadImagesToNodes() {
+  CLUSTERNAME=$1
   for image in "${SOURCETAGS[@]}"; do
-    echo "push image ${LOCAL_REGISTRY_NAME}${image}"
-    docker tag "${image}" "${LOCAL_REGISTRY_NAME}${image}"
-    docker push "${LOCAL_REGISTRY_NAME}${image}"
+    echo "push image ${image}"
+    kind load docker-image -n ${CLUSTERNAME} "${image}"
   done
 }
 
-if [[ -z "${SOURCETAG}" ]]; then
-  getImageTag '*-integration'
-else
-  SOURCETAGS+=($SOURCETAG)
-fi
+function pushImagesToRepo() {
+  for image in "${SOURCETAGS[@]}"; do
+    echo "push image ${image}"
+    docker tag "${image}" "${REGISTRY_NAME}${image}"
+    docker push "${REGISTRY_NAME}${image}"
+  done
+}
 
-if [[ "${#SOURCETAGS[@]}" == 0 ]]; then
-  echo "No image to load, probably build a docker image first?"
-  exit 0
-fi
+function doAllClusters() {
+  if [[ -z "${SOURCETAG}" ]]; then
+    getImageTag '*-integration'
+  else
+    SOURCETAGS+=($SOURCETAG)
+  fi
+  
+  if [[ "${#SOURCETAGS[@]}" == 0 ]]; then
+    echo "No image to load, probably build a docker image first?"
+    exit 0
+  fi
 
-pushImagesToRepo
+  if [[ "${LOAD}" == "true" ]]; then
+    allnames=$(kind get clusters)
+    allclusters=($(echo ${allnames}))
+    for acluster in "${allclusters[@]}"; do
+      loadImagesToNodes ${acluster}
+    done
+  else 
+    pushImagesToRepo
+  fi
+}
+
+doAllClusters
