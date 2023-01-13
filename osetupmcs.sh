@@ -32,7 +32,7 @@ TOPOLOGY="$(pwd)/topology.json"
 TOPOLOGYCONTENT=""
 ACTION=""
 LOADIMAGE="false"
-KIND_REGISTRY_NAME="${KIND_REGISTRY_NAME:-kind-registry}"
+REGISTRY_CNAME="kind-registry"
 KIND_REGISTRY_PORT="${KIND_REGISTRY_PORT:-5000}"
 WORKERNODES=0
 
@@ -65,9 +65,9 @@ if [[ "$ACTION" == "DEL" ]]; then
     kind delete cluster --name "${acluster}"
   done
   # check if the registry container exists
-  registry=$(docker ps -a | grep ${KIND_REGISTRY_NAME} || true)
+  registry=$(docker ps -a | grep ${REGISTRY_CNAME} || true)
   if [[ ! -z $registry ]]; then
-    docker rm -f ${KIND_REGISTRY_NAME}
+    docker rm -f ${REGISTRY_CNAME}
   fi
   docker volume prune -f
   exit 0
@@ -98,13 +98,13 @@ function getTopology() {
 
 function setup_kind_registry() {
   # create a registry container if it not running already
-  running="$(docker inspect -f '{{.State.Running}}' "${KIND_REGISTRY_NAME}" 2>/dev/null || true)"
+  running="$(docker inspect -f '{{.State.Running}}' "${REGISTRY_CNAME}" 2>/dev/null || true)"
   if [[ "${running}" != 'true' ]]; then
       docker run -d --restart=always -p "${KIND_REGISTRY_PORT}:5000" \
-        --name "${KIND_REGISTRY_NAME}" gcr.io/istio-testing/registry:2
+        --name "${REGISTRY_CNAME}" registry:2
 
     # Allow kind nodes to reach the registry
-    docker network connect "kind" "${KIND_REGISTRY_NAME}" 2>/dev/null || true
+    docker network connect "kind" "${REGISTRY_CNAME}" 2>/dev/null || true
   fi
 }
 
@@ -181,5 +181,6 @@ addRoutes
 
 # push localhost images to local image repo if set to do so
 if [[ "${LOADIMAGE:l}" == "true" ]]; then
-  opushimage
+  setup_kind_registry
+  # opushimage
 fi

@@ -14,7 +14,7 @@ function printHelp() {
 }
 
 # Setup default values
-REPO=${REPO:-'netappdownloads.jfrog.io/docker-astra-staging/'}
+LOCAL_REGISTRY_NAME="localhost:5000/"
 SOURCETAG=""
 declare -a SOURCETAGS=()
 
@@ -39,31 +39,22 @@ function getImageTag() {
 }
 
 function pushImagesToRepo() {
-  CLUSTERNAME=$1
   for image in "${SOURCETAGS[@]}"; do
-    echo "push image ${REPO}${image}"
-    docker tag "${image}" "$REPO${image}"
-    kind load docker-image -n ${CLUSTERNAME} "${REPO}${image}"
+    echo "push image ${LOCAL_REGISTRY_NAME}${image}"
+    docker tag "${image}" "${LOCAL_REGISTRY_NAME}${image}"
+    docker push "${LOCAL_REGISTRY_NAME}${image}"
   done
 }
 
-function doAllClusters() {
-  if [[ -z "${SOURCETAG}" ]]; then
-    getImageTag '*-integration'
-  else
-    SOURCETAGS+=($SOURCETAG)
-  fi
+if [[ -z "${SOURCETAG}" ]]; then
+  getImageTag '*-integration'
+else
+  SOURCETAGS+=($SOURCETAG)
+fi
 
-  if [[ "${#SOURCETAGS[@]}" == 0 ]]; then
-    echo "No image to load, probably build a docker image first?"
-    exit 0
-  fi
+if [[ "${#SOURCETAGS[@]}" == 0 ]]; then
+  echo "No image to load, probably build a docker image first?"
+  exit 0
+fi
 
-  allnames=$(kind get clusters)
-  allclusters=($(echo ${allnames}))
-  for acluster in "${allclusters[@]}"; do
-    pushImagesToRepo ${acluster} 
-  done
-}
-
-doAllClusters
+pushImagesToRepo

@@ -50,6 +50,7 @@ ACTION=""
 CNI=""
 WORKERNODES=0
 APIIP=$(ifconfig | grep 'inet ' | grep broadcast | cut -d ' ' -f 2)
+REGISTRY_ENDPOINT="${REGISTRY_ENDPOINT:-kind-registry}"
 
 FEATURES=$(cat << EOF
 featureGates:
@@ -77,7 +78,7 @@ kubeadmConfigPatches:
 containerdConfigPatches:
   - |-
     [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5000"]
-      endpoint = ["http://kind-registry:5000"]
+      endpoint = ["http://${REGISTRY_ENDPOINT}:5000"]
 EOF
 )
 
