@@ -84,7 +84,7 @@ if [[ -p /dev/stdin ]]; then
 fi
 
 function getClusterCAKeyPair() {
-  if [[ ! -f "${WORKDIR}ca.key" ]]; then
+  if [[ ! -f "${WORKDIR}/ca.key" ]]; then
     docker cp "${CLUSTERNAME}-control-plane:/etc/kubernetes/pki/ca.crt" "${WORKDIR}/ca.crt"
     docker cp "${CLUSTERNAME}-control-plane:/etc/kubernetes/pki/ca.key" "${WORKDIR}/ca.key"
   fi
@@ -110,7 +110,54 @@ function removeTempFiles() {
     rm -rf ${WORKDIR}/*.srl
 }
 
-function createUser() {
+function createUserUsingSigningRequest() {
+  # Remove space and comma in the user name to make a file name
+  fname="${UNAME// /-}"; fname="${fname//,/-}";
+  fname=$(tr '[:upper:]' '[:lower:]' <<< "$fname")
+  echo "Creating certificates for ${UNAME} using ${fname}"
+
+  # if already exists, remove first
+  # result=$(kg csr ${fname} 2>/dev/null || true)
+  # if [[ ! -z "${result}" ]]; then
+  #   kubectl certificate deny ${fname}  
+  #   kubectl delete csr ${fname}
+  # fi
+
+  # Create private key
+  openssl genrsa -out "${WORKDIR}/${fname}.key" 2048
+  if [[ -z "${GNAME}" ]]; then
+    openssl req -new -key "${WORKDIR}/${fname}.key" -out "${WORKDIR}/${fname}.csr" -subj "/CN=${UNAME}"
+  else
+    openssl req -new -key "${WORKDIR}/${fname}.key" -out "${WORKDIR}/${fname}.csr" -subj "/CN=${UNAME}/O=${GNAME}"
+  fi
+
+  # the following method uses kubectl request for CertificateSigningRequest
+  encodedcsr=$(cat "${WORKDIR}/${fname}.csr"|base64 -b 0)
+  cat << EOF | kubectl apply -f -
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: ${fname}
+spec:
+  request: ${encodedcsr}
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 864000  # 10 days
+  usages:
+  - client auth
+EOF
+
+  # approve the certificate by the current user
+  kubectl certificate approve ${fname}
+
+  # get the new user certificate
+  kubectl get csr ${fname} -o jsonpath='{.status.certificate}' | base64 -d > ${WORKDIR}/${fname}.crt
+
+  setupKubeConfig ${fname}
+  removeTempFiles ${fname}
+}
+
+function createUserUsingCACertAndKey() {
+  getClusterCAKeyPair
   # Remove space and comma in the user name to make a file name
   fname="${UNAME// /-}"; fname="${fname//,/-}";
   fname=$(tr '[:upper:]' '[:lower:]' <<< "$fname")
@@ -123,6 +170,7 @@ function createUser() {
     openssl req -new -key "${WORKDIR}/${fname}.key" -out "${WORKDIR}/${fname}.csr" -subj "/CN=${UNAME}/O=${GNAME}"
   fi
 
+  # the following method uses copied ca cert and key from master node
   openssl x509 -req -in "${WORKDIR}/${fname}.csr" -CA "${WORKDIR}/ca.crt" -CAkey "${WORKDIR}/ca.key" \
     -CAcreateserial -out "${WORKDIR}/${fname}.crt" -days 500
 
@@ -130,5 +178,5 @@ function createUser() {
   removeTempFiles ${fname}
 }
 
-getClusterCAKeyPair
-createUser
+# createUserUsingSigningRequest
+createUserUsingCACertAndKey
